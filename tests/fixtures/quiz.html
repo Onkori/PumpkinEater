@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Sample Quiz</title>
+  <style>
+    .fake-radio { display: inline-block; padding: 4px 8px; border: 1px solid #999; margin: 2px; }
+    .visually-hidden-input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+    .hidden { display: none; }
+  </style>
+</head>
+<body>
+  <header>
+    <form role="search"><input type="text" id="site-search" placeholder="Search site"></form>
+  </header>
+
+  <article>
+    <h1>Geography & Math Quiz</h1>
+    <p>Read the passage: The river Nile flows north through eleven countries.</p>
+
+    <form id="quiz">
+      <div class="q">
+        <label for="name">Your full name</label>
+        <input id="name" name="name" type="text" required>
+      </div>
+
+      <div class="q">
+        <p>1. What is 7 multiplied by 6?</p>
+        <input type="number" id="mult" aria-label="Answer">
+      </div>
+
+      <fieldset>
+        <legend>2. What is the capital of France?</legend>
+        <label><input type="radio" name="capital" value="a"> Berlin</label>
+        <label><input type="radio" name="capital" value="b"> Paris</label>
+        <label><input type="radio" name="capital" value="c"> Madrid</label>
+      </fieldset>
+
+      <div class="q">
+        <h3>3. Which of these are prime numbers?</h3>
+        <input type="checkbox" name="primes" value="2" id="p2"><label for="p2">2</label>
+        <input type="checkbox" name="primes" value="4" id="p4"><label for="p4">4</label>
+        <input type="checkbox" name="primes" value="7" id="p7"><label for="p7">7</label>
+      </div>
+
+      <div class="q">
+        <label for="continent">4. Which continent is Egypt in?</label>
+        <select id="continent">
+          <option value="">Choose…</option>
+          <option value="eu">Europe</option>
+          <option value="af">Africa</option>
+          <option value="as">Asia</option>
+        </select>
+      </div>
+
+      <div class="q">
+        <p>5. In which direction does the Nile flow, according to the passage?</p>
+        <textarea id="essay" rows="3"></textarea>
+      </div>
+
+      <!-- Google Forms style custom widgets -->
+      <div role="listitem" class="q">
+        <div id="q6title">6. Largest planet in the solar system?</div>
+        <div role="radiogroup" aria-labelledby="q6title">
+          <div class="opt"><div role="radio" aria-checked="false" aria-label="Mars" class="fake-radio" id="mars"></div><span>Mars</span></div>
+          <div class="opt"><div role="radio" aria-checked="false" aria-label="Jupiter" class="fake-radio" id="jupiter"></div><span>Jupiter</span></div>
+        </div>
+      </div>
+
+      <div role="listitem" class="q">
+        <div>7. Select the even numbers</div>
+        <div role="list">
+          <div role="checkbox" aria-checked="false" aria-label="3" class="fake-radio" id="c3"></div>
+          <div role="checkbox" aria-checked="false" aria-label="8" class="fake-radio" id="c8"></div>
+          <div role="checkbox" aria-checked="false" aria-label="10" class="fake-radio" id="c10"></div>
+        </div>
+      </div>
+
+      <div class="q">
+        <p>8. Describe your favourite season.</p>
+        <div contenteditable="true" id="rich" style="min-height: 40px; border: 1px solid #ccc"></div>
+      </div>
+
+      <div class="q">
+        <p>9. Is water wet?</p>
+        <input type="radio" name="wet" value="y"> Yes
+        <input type="radio" name="wet" value="n"> No
+      </div>
+
+      <label><input type="checkbox" id="agree"> I agree to the terms</label>
+
+      <div class="q">
+        <label><input type="radio" name="styled" value="1" class="visually-hidden-input"> Styled one</label>
+        <label><input type="radio" name="styled" value="2" class="visually-hidden-input"> Styled two</label>
+      </div>
+
+      <input type="password" id="pw">
+      <input type="hidden" name="token" value="x">
+      <input type="text" class="hidden" id="hidden-text">
+      <input type="text" id="disabled-text" disabled>
+      <button type="submit">Submit</button>
+    </form>
+  </article>
+
+  <script>
+    // Record events so tests can check that frameworks would be notified.
+    window.events = [];
+    document.addEventListener('input', (e) => window.events.push(['input', e.target.id || e.target.name]), true);
+    document.addEventListener('change', (e) => window.events.push(['change', e.target.id || e.target.name]), true);
+    // Custom ARIA widgets toggle on click, like real ones.
+    for (const r of document.querySelectorAll('[role="radio"]')) {
+      r.addEventListener('click', () => {
+        r.closest('[role="radiogroup"]').querySelectorAll('[role="radio"]').forEach((o) => o.setAttribute('aria-checked', 'false'));
+        r.setAttribute('aria-checked', 'true');
+      });
+    }
+    for (const c of document.querySelectorAll('[role="checkbox"]')) {
+      c.addEventListener('click', () => c.setAttribute('aria-checked', String(c.getAttribute('aria-checked') !== 'true')));
+    }
+  </script>
+</body>
+</html>

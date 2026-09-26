@@ -1,0 +1,18 @@
+main { max-width: 640px; margin: 0 auto; padding: 24px 16px 48px; }
+header { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+h1 { font-size: 20px; margin: 0; }
+section { padding: 16px 0; border-top: 1px solid var(--border); }
+label { display: block; font-weight: 600; margin-bottom: 6px; }
+label.check { display: flex; gap: 8px; align-items: center; }
+input[type="password"], input[type="text"], select, textarea {
+  width: 100%; padding: 7px 9px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg);
+}
+textarea { resize: vertical; }
+.row { display: flex; gap: 8px; }
+.row input { flex: 1; min-width: 0; }
+.two { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+@media (max-width: 520px) { .two { grid-template-columns: 1fr; } }
+.hint { color: var(--muted); font-size: 12px; margin: 6px 0 0; }
+#keyStatus.ok { color: var(--ok); }
+#keyStatus.bad { color: var(--danger); }
+.footer { display: flex; gap: 12px; align-items: center; border-top: 1px solid var(--border); padding-top: 16px; }

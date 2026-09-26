@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>PumpkinEater</title>
+  <link rel="stylesheet" href="../ui.css">
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <header>
+    <img src="../icons/icon32.png" alt="" width="20" height="20">
+    <h1>PumpkinEater</h1>
+    <button id="settings" class="icon" title="Settings" aria-label="Settings">⚙</button>
+  </header>
+
+  <div class="controls">
+    <div class="segmented" role="radiogroup" aria-label="What to do with answers">
+      <label><input type="radio" name="mode" value="fill"> Fill in</label>
+      <label><input type="radio" name="mode" value="suggest"> Suggest only</label>
+    </div>
+    <div class="actions">
+      <button id="run" class="primary">Answer questions</button>
+      <button id="clear" title="Remove the answer badges from the page">Clear</button>
+    </div>
+  </div>
+
+  <p id="status" class="status" hidden></p>
+  <ol id="results" class="results"></ol>
+
+  <script type="module" src="popup.js"></script>
+</body>
+</html>

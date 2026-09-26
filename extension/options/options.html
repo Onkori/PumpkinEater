@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PumpkinEater settings</title>
+  <link rel="stylesheet" href="../ui.css">
+  <link rel="stylesheet" href="options.css">
+</head>
+<body>
+  <main>
+    <header>
+      <img src="../icons/icon48.png" alt="" width="32" height="32">
+      <h1>PumpkinEater settings</h1>
+    </header>
+
+    <form id="form">
+      <section>
+        <label for="apiKey">Anthropic API key</label>
+        <div class="row">
+          <input id="apiKey" type="password" autocomplete="off" spellcheck="false" placeholder="sk-ant-…">
+          <button type="button" id="toggleKey">Show</button>
+          <button type="button" id="checkKey">Check</button>
+        </div>
+        <p class="hint">Stored only in this browser profile and sent only to api.anthropic.com. Get a key at
+          <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">console.anthropic.com</a>.</p>
+        <p id="keyStatus" class="hint" role="status"></p>
+      </section>
+
+      <section class="two">
+        <div>
+          <label for="model">Model</label>
+          <select id="model"></select>
+        </div>
+        <div>
+          <label for="effort">Effort</label>
+          <select id="effort"></select>
+          <p class="hint">Higher effort thinks longer: more accurate on hard questions, slower and costlier.</p>
+        </div>
+      </section>
+
+      <section>
+        <label class="check"><input id="includePageText" type="checkbox"> Send the page's visible text as context</label>
+        <p class="hint">Needed for questions about a passage, table or code on the page. Turn off to send only the questions.</p>
+      </section>
+
+      <section>
+        <label for="profile">About you (optional)</label>
+        <textarea id="profile" rows="5" placeholder="Name: Alex Doe&#10;Email: alex@example.com&#10;Anything else forms often ask"></textarea>
+        <p class="hint">Used for questions about yourself. Leave empty and those boxes are skipped.</p>
+      </section>
+
+      <div class="footer">
+        <button type="submit" class="primary">Save</button>
+        <span id="saved" class="muted" role="status"></span>
+      </div>
+    </form>
+  </main>
+  <script type="module" src="options.js"></script>
+</body>
+</html>
