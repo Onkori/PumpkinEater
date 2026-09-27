@@ -1,3 +1,4 @@
+import { formatReportText, scrubSecrets } from '../lib/diagnostics.js';
 import { getSettings, saveSettings } from '../lib/settings.js';
 
 const $ = (id) => document.getElementById(id);
@@ -18,6 +19,8 @@ const tabId = Number.isInteger(tabParam) && tabParam > 0
   ? tabParam
   : (await chrome.tabs.query({ active: true, currentWindow: true }))[0]?.id;
 const key = `tab:${tabId}`;
+const diagKey = `diag:${tabId}`;
+let report = null;
 
 const settings = await getSettings();
 for (const radio of document.querySelectorAll('input[name="mode"]')) {
@@ -41,12 +44,37 @@ $('clear').addEventListener('click', async () => {
   } catch {
     // Nothing injected on this page (or it can't be scripted); nothing to clear.
   }
-  await chrome.storage.session.remove(key);
+  await chrome.storage.session.remove([key, diagKey]);
 });
 
-function optionText(question, indices) {
-  if (question.type === 'checkbox') return indices.includes(0) ? 'Ticked' : 'Left unticked';
-  return indices.map((i) => question.options?.[i]).filter(Boolean).join(', ') || '(none selected)';
+function download(filename, text, type) {
+  const url = URL.createObjectURL(new Blob([text], { type }));
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+async function exportReport(format) {
+  if (!report) return;
+  // The stored report is already scrubbed; scrub again with the current key in case it changed.
+  const { apiKey } = await getSettings();
+  const clean = scrubSecrets(report, [apiKey]);
+  let host = 'page';
+  try { host = new URL(clean.page.url).hostname || 'page'; } catch { /* keep default */ }
+  const stamp = (clean.run.finished_at || new Date().toISOString()).replace(/[:.]/g, '-');
+  const name = `pumpkineater-diagnostics-${host}-${stamp}`;
+  if (format === 'json') download(`${name}.json`, JSON.stringify(clean, null, 2), 'application/json');
+  else download(`${name}.txt`, formatReportText(clean), 'text/plain');
+}
+$('exportJson').addEventListener('click', () => exportReport('json'));
+$('exportText').addEventListener('click', () => exportReport('text'));
+
+function optionText(question, ids) {
+  if (question.type === 'checkbox') return ids.length ? 'Ticked' : 'Left unticked';
+  const byId = new Map((question.options || []).map((o) => [o.choice_id, o.text]));
+  return ids.map((id) => byId.get(id) ?? `unknown choice ${id}`).join(', ') || '(none selected)';
 }
 
 function renderResults(state) {
@@ -55,6 +83,7 @@ function renderResults(state) {
   if (!state?.answers) return;
   const byId = new Map(state.answers.map((a) => [a.id, a]));
   const resultById = new Map((state.results || []).map((r) => [r.id, r]));
+  const outcomeById = new Map((report?.questions || []).map((q) => [q.question_id, q.outcome]));
 
   for (const q of state.questions || []) {
     const answer = byId.get(q.id);
@@ -69,6 +98,14 @@ function renderResults(state) {
     conf.className = `pill ${answer.confidence}`;
     conf.textContent = answer.confidence;
     meta.append(`${TYPE_LABELS[q.type] || q.type} · ${STATUS_LABELS[result?.status] || ''}`, conf);
+    const outcome = outcomeById.get(q.id);
+    if (outcome) {
+      const tag = document.createElement('span');
+      tag.className = 'outcome';
+      tag.textContent = `${q.id} · ${outcome.code}${outcome.failure_type ? ` (${outcome.failure_type})` : ''}`;
+      tag.title = outcome.label;
+      meta.append(tag);
+    }
 
     const question = document.createElement('div');
     question.className = 'question';
@@ -77,7 +114,7 @@ function renderResults(state) {
     const ans = document.createElement('div');
     ans.className = 'answer';
     ans.textContent = !answer.should_fill ? '—'
-      : q.options ? optionText(q, answer.selected_options) : answer.answer_text;
+      : q.options ? optionText(q, answer.selected_choice_ids) : answer.answer_text;
 
     const why = document.createElement('div');
     why.className = 'why';
@@ -117,7 +154,20 @@ function render(state) {
   renderResults(state);
 }
 
-render((await chrome.storage.session.get(key))[key]);
+let current = null;
+const stored = await chrome.storage.session.get([key, diagKey]);
+current = stored[key];
+report = stored[diagKey] ?? null;
+$('exportBar').hidden = !report;
+render(current);
 chrome.storage.session.onChanged.addListener((changes) => {
-  if (changes[key]) render(changes[key].newValue);
+  if (changes[diagKey]) {
+    report = changes[diagKey].newValue ?? null;
+    $('exportBar').hidden = !report;
+    render(current);
+  }
+  if (changes[key]) {
+    current = changes[key].newValue;
+    render(current);
+  }
 });

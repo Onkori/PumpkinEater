@@ -140,29 +140,80 @@
     return text;
   }
 
+  // Returns the question text plus where it came from, for diagnostics.
   function questionText(group) {
     const labelSource = group.container || (group.elements.length === 1 ? group.elements[0] : null);
     const label = labelSource ? ownLabel(labelSource) : '';
     // A long explicit label is the question; a short one ("Answer", "Name") may need context.
-    if (label.length >= 25) return cap(label);
+    if (label.length >= 25) return { text: cap(label), source: 'label', label, context: '' };
     const context = contextText(group);
-    if (!context) return label;
-    if (!label || context.includes(label)) return context;
-    return cap(`${context} (field label: ${label})`);
+    if (!context) return { text: label, source: label ? 'label' : 'none', label, context };
+    if (!label || context.includes(label)) return { text: context, source: 'nearby_text', label, context };
+    return { text: cap(`${context} (field label: ${label})`), source: 'nearby_text+label', label, context };
   }
 
+  // `text` is what Claude sees (whitespace collapsed); `raw` is the exact source string.
   function optionLabel(el) {
-    const aria = labelledByText(el) || clean(el.getAttribute('aria-label'));
-    if (aria) return { text: aria, nodes: [] };
+    if (el.getAttribute('aria-labelledby')) {
+      const text = labelledByText(el);
+      const raw = el.getAttribute('aria-labelledby').split(/\s+/)
+        .map((id) => document.getElementById(id)?.textContent ?? '').join(' ');
+      if (text) return { text, raw, nodes: [] };
+    }
+    if (clean(el.getAttribute('aria-label'))) {
+      return { text: clean(el.getAttribute('aria-label')), raw: el.getAttribute('aria-label'), nodes: [] };
+    }
     if (el.labels && el.labels.length) {
-      return { text: clean([...el.labels].map((l) => visibleText(l, [el])).join(' ')), nodes: [...el.labels] };
+      return {
+        text: clean([...el.labels].map((l) => visibleText(l, [el])).join(' ')),
+        raw: [...el.labels].map((l) => l.textContent).join(' '),
+        nodes: [...el.labels],
+      };
     }
     if (el.getAttribute('role')) {
-      return { text: visibleText(el) || clean(el.getAttribute('data-value')), nodes: [] };
+      const text = visibleText(el);
+      return text ? { text, raw: el.textContent, nodes: [] }
+        : { text: clean(el.getAttribute('data-value')), raw: el.getAttribute('data-value') ?? '', nodes: [] };
     }
     const nodes = adjacentTextNodes(el);
-    const text = clean(nodes.map((n) => n.textContent).join(' '));
-    return { text: text || clean(el.value), nodes };
+    const raw = nodes.map((n) => n.textContent).join('');
+    return clean(raw) ? { text: clean(raw), raw, nodes } : { text: clean(el.value), raw: el.value, nodes };
+  }
+
+  function choiceTextNow(choice) {
+    return choice.el.tagName === 'OPTION' ? clean(choice.el.text) : optionLabel(choice.el).text;
+  }
+
+  function isSelected(el) {
+    return el.tagName === 'OPTION' ? el.selected : isChecked(el);
+  }
+
+  // A selector that finds this element again, for diagnostics.
+  function cssPath(el) {
+    const parts = [];
+    for (let n = el; n && n.nodeType === Node.ELEMENT_NODE && n !== document.documentElement; n = n.parentElement) {
+      if (n.id) {
+        parts.unshift(`#${CSS.escape(n.id)}`);
+        break;
+      }
+      const tag = n.tagName.toLowerCase();
+      const same = n.parentElement ? [...n.parentElement.children].filter((c) => c.tagName === n.tagName) : [];
+      parts.unshift(same.length > 1 ? `${tag}:nth-of-type(${same.indexOf(n) + 1})` : tag);
+    }
+    return parts.join(' > ');
+  }
+
+  function describeElement(el) {
+    if (!el) return null;
+    const d = { tag: el.tagName.toLowerCase(), selector: cssPath(el) };
+    for (const attr of ['id', 'name', 'type', 'value', 'role', 'aria-label', 'aria-checked', 'data-value']) {
+      const v = el.getAttribute(attr);
+      if (v !== null) d[attr] = v;
+    }
+    if (el.type === 'radio' || el.type === 'checkbox') d.checked = el.checked;
+    if (el.tagName === 'OPTION') Object.assign(d, { text: el.text, index: el.index, selected: el.selected });
+    if (el.labels?.length) d.label_text = clean([...el.labels].map((l) => l.textContent).join(' '));
+    return d;
   }
 
   function isChecked(el) {
@@ -258,24 +309,21 @@
     return found;
   }
 
+  const CHOICE_KINDS = new Set(['single_choice', 'multiple_choice', 'checkbox', 'dropdown', 'multi_select']);
+
+  // Returns the question as sent to Claude, and the detection details for diagnostics.
   function describe(group) {
     const q = { id: group.id, type: group.kind, question: '' };
     const el = group.elements[0];
 
     if (group.kind === 'dropdown' || group.kind === 'multi_select') {
-      group.optionEls = [...el.options].filter((o, i) =>
+      const optionEls = [...el.options].filter((o, i) =>
         !o.disabled && !(i === 0 && !o.value && !el.multiple)); // drop "Choose…" placeholders
-      group.options = group.optionEls.map((o) => clean(o.text));
-      q.options = group.options;
-      const selected = group.optionEls.flatMap((o, i) => (o.selected && o.value ? [i] : []));
-      if (selected.length) q.current_selection = selected;
-    } else if (['single_choice', 'multiple_choice', 'checkbox'].includes(group.kind)) {
+      group.choices = optionEls.map((o) => ({ text: clean(o.text), raw: o.text, el: o }));
+    } else if (CHOICE_KINDS.has(group.kind)) {
       const labels = group.elements.map(optionLabel);
-      group.options = labels.map((l) => l.text);
+      group.choices = group.elements.map((o, i) => ({ text: labels[i].text, raw: labels[i].raw, el: o }));
       group.optionNodes = labels.flatMap((l) => l.nodes);
-      q.options = group.options;
-      const selected = group.elements.flatMap((o, i) => (isChecked(o) ? [i] : []));
-      if (selected.length) q.current_selection = selected;
     } else {
       if (el.type && el.type !== 'text' && TEXT_INPUT_TYPES.has(el.type)) q.input_type = el.type;
       const placeholder = clean(el.getAttribute('placeholder') || el.getAttribute('aria-placeholder'));
@@ -285,9 +333,40 @@
       if (current) q.current_value = current;
     }
 
-    q.question = questionText(group) || q.placeholder || clean(el.getAttribute('name')) || '(no question text found)';
+    if (group.choices) {
+      // Stable, question-scoped ids so an answer can only ever select one of this question's options.
+      group.choices.forEach((c, i) => { c.id = `${group.id}.c${i + 1}`; });
+      group.options = group.choices.map((c) => c.text);
+      q.options = group.choices.map((c) => ({ choice_id: c.id, text: c.text }));
+      const selected = group.choices.filter((c) => isSelected(c.el) && (c.el.tagName !== 'OPTION' || c.el.value));
+      if (selected.length) q.current_choice_ids = selected.map((c) => c.id);
+    }
+
+    const found = questionText(group);
+    let source = found.source;
+    q.question = found.text;
+    if (!q.question) {
+      const fallbacks = [['placeholder', q.placeholder], ['name_attribute', clean(el.getAttribute('name'))]];
+      const [src, text] = fallbacks.find(([, t]) => t) || ['none', '(no question text found)'];
+      q.question = text;
+      source = src;
+    }
     if (isRequired(group)) q.required = true;
-    return q;
+
+    const detail = {
+      question_id: group.id,
+      type: group.kind,
+      question_text: q.question,
+      question_text_source: source,
+      label_text: found.label,
+      context_text: found.context,
+      choices: (group.choices || []).map((c) => ({
+        choice_id: c.id, text: c.text, raw_text: c.raw, element: describeElement(c.el),
+      })),
+      elements: group.choices ? [] : group.elements.map(describeElement),
+      container: group.container ? describeElement(group.container) : null,
+    };
+    return { question: q, detail };
   }
 
   function scan({ includePageText = true } = {}) {
@@ -300,18 +379,20 @@
       g.id = `q${i + 1}`;
       g.options = [];
       g.optionNodes = [];
+      g.choices = null;
       g.elements.forEach((el) => el.setAttribute(ID_ATTR, g.id));
       groups.set(g.id, g);
     });
-    const questions = found.map(describe);
+    const described = found.map(describe);
 
     const page = { title: document.title, url: location.href };
     if (includePageText) {
       const text = document.body ? document.body.innerText : '';
       page.text = text.length > MAX_PAGE_CHARS ? text.slice(0, MAX_PAGE_CHARS) : text;
       page.truncated = text.length > MAX_PAGE_CHARS;
+      page.original_length = text.length;
     }
-    return { page, questions };
+    return { page, questions: described.map((d) => d.question), details: described.map((d) => d.detail) };
   }
 
   // ---------------------------------------------------------------- fill
@@ -349,83 +430,168 @@
     el.click();
   }
 
-  function setChecked(el, want) {
-    if (isChecked(el) === want) return;
+  function setChecked(choice, want, actions) {
+    const { el } = choice;
+    if (isChecked(el) === want) {
+      actions.push({ action: 'none', element: cssPath(el), choice_id: choice.id, detail: `already ${want ? 'selected' : 'unselected'}` });
+      return;
+    }
     if (el.getAttribute('role')) press(el);
     else el.click();
+    actions.push({ action: el.getAttribute('role') ? 'press' : 'click', element: cssPath(el), choice_id: choice.id, detail: want ? 'select' : 'unselect' });
   }
 
-  function validIndices(indices, count) {
-    return [...new Set((indices || []).filter((i) => Number.isInteger(i) && i >= 0 && i < count))];
+  function setOption(select, choice, actions) {
+    // Select by index when option values repeat, so the value can't pick a different option.
+    const duplicates = [...select.options].filter((o) => o.value === choice.el.value).length > 1;
+    if (duplicates) {
+      select.selectedIndex = choice.el.index;
+      select.dispatchEvent(new Event('input', { bubbles: true }));
+      select.dispatchEvent(new Event('change', { bubbles: true }));
+    } else {
+      setNativeValue(select, choice.el.value);
+    }
+    actions.push({ action: 'select_option', element: cssPath(select), choice_id: choice.id, detail: `option index ${choice.el.index}${duplicates ? ' (by index: duplicate values)' : ''}` });
   }
 
-  function fill(group, answer) {
+  // Maps Claude's choice ids onto this question's choices. Anything that isn't
+  // exactly one of this question's ids is rejected rather than guessed at.
+  function resolveChoices(group, ids) {
+    const chosen = [];
+    const invalid = [];
+    for (const id of ids || []) {
+      const choice = group.choices.find((c) => c.id === id);
+      if (!choice) invalid.push(id);
+      else if (!chosen.includes(choice)) chosen.push(choice);
+    }
+    return { chosen, invalid };
+  }
+
+  function fill(group, answer, chosen, actions) {
     const el = group.elements[0];
     switch (group.kind) {
       case 'text':
       case 'paragraph':
-        if ('value' in el && !el.isContentEditable) setNativeValue(el, answer.answer_text);
-        else setEditableText(el, answer.answer_text);
+        if ('value' in el && !el.isContentEditable) {
+          setNativeValue(el, answer.answer_text);
+          actions.push({ action: 'set_value', element: cssPath(el), detail: JSON.stringify(answer.answer_text) });
+        } else {
+          setEditableText(el, answer.answer_text);
+          actions.push({ action: 'insert_text', element: cssPath(el), detail: JSON.stringify(answer.answer_text) });
+        }
         break;
-      case 'dropdown': {
-        const [i] = validIndices(answer.selected_options, group.optionEls.length);
-        if (i === undefined) throw new Error('no valid option chosen');
-        setNativeValue(el, group.optionEls[i].value);
+      case 'dropdown':
+        setOption(el, chosen[0], actions);
         break;
-      }
-      case 'multi_select': {
-        const chosen = validIndices(answer.selected_options, group.optionEls.length);
-        group.optionEls.forEach((o, i) => { o.selected = chosen.includes(i); });
+      case 'multi_select':
+        group.choices.forEach((c) => { c.el.selected = chosen.includes(c); });
         el.dispatchEvent(new Event('input', { bubbles: true }));
         el.dispatchEvent(new Event('change', { bubbles: true }));
+        actions.push({ action: 'select_options', element: cssPath(el), detail: chosen.map((c) => c.id).join(', ') || '(none)' });
         break;
-      }
-      case 'single_choice': {
-        const [i] = validIndices(answer.selected_options, group.elements.length);
-        if (i === undefined) throw new Error('no valid option chosen');
-        setChecked(group.elements[i], true);
+      case 'single_choice':
+        setChecked(chosen[0], true, actions);
         break;
-      }
       case 'multiple_choice':
-      case 'checkbox': {
-        const chosen = validIndices(answer.selected_options, group.elements.length);
-        group.elements.forEach((opt, i) => setChecked(opt, chosen.includes(i)));
+      case 'checkbox':
+        group.choices.forEach((c) => setChecked(c, chosen.includes(c), actions));
         break;
-      }
       default:
         throw new Error(`unsupported question type ${group.kind}`);
     }
   }
 
-  function answerSummary(group, answer) {
-    if (group.kind === 'text' || group.kind === 'paragraph') return answer.answer_text;
-    const chosen = validIndices(answer.selected_options, group.options.length);
-    if (group.kind === 'checkbox') return chosen.length ? 'Ticked' : 'Left unticked';
-    return chosen.length ? chosen.map((i) => group.options[i]).join(', ') : '(none selected)';
+  function currentState(group) {
+    if (group.choices) return group.choices.filter((c) => isSelected(c.el)).map((c) => c.id);
+    const el = group.elements[0];
+    return 'value' in el && !el.isContentEditable ? el.value : el.innerText.trim();
   }
 
-  function apply(answers, mode = 'fill') {
+  function verify(group, answer, chosen) {
+    const after = currentState(group);
+    if (group.choices) {
+      const expected = chosen.map((c) => c.id).sort();
+      const actual = [...after].sort();
+      const ok = expected.length === actual.length && expected.every((id, i) => id === actual[i]);
+      return {
+        ok,
+        expected,
+        actual,
+        detail: ok ? `page shows ${actual.join(', ') || 'nothing'} selected, as chosen`
+          : `expected ${expected.join(', ') || 'nothing'} selected, page shows ${actual.join(', ') || 'nothing'}`,
+      };
+    }
+    const ok = clean(after) === clean(answer.answer_text);
+    return { ok, expected: answer.answer_text, actual: after, detail: ok ? 'box holds the answer text' : 'box does not hold the answer text' };
+  }
+
+  function answerSummary(group, answer, chosen) {
+    if (!group.choices) return answer.answer_text;
+    if (group.kind === 'checkbox') return chosen.length ? 'Ticked' : 'Left unticked';
+    return chosen.length ? chosen.map((c) => c.text).join(', ') : '(none selected)';
+  }
+
+  // Fills (or, in suggest mode, only shows) each answer. Every result says which
+  // DOM element each chosen choice id mapped to, what was done, and what the page
+  // showed afterwards. `debug` only adds badges for skipped questions.
+  function apply(answers, mode = 'fill', { debug = false } = {}) {
     clear();
     const results = [];
     for (const answer of answers) {
       const group = groups.get(answer.id);
       if (!group || !group.elements[0].isConnected) {
-        results.push({ id: answer.id, status: 'missing' });
+        results.push({ id: answer.id, status: 'missing', error: 'question element is no longer on the page' });
         continue;
       }
       if (!answer.should_fill) {
+        if (debug) addBadge(group, answer, 'Skipped', 'skipped');
         results.push({ id: answer.id, status: 'skipped' });
         continue;
       }
-      const summary = answerSummary(group, answer);
+
+      const result = { id: answer.id, actions: [], mapping: [], before: currentState(group) };
+      let chosen = [];
       try {
-        if (mode === 'fill') fill(group, answer);
-        addBadge(group, answer, summary, mode === 'fill' ? 'filled' : 'suggested');
-        results.push({ id: answer.id, status: mode === 'fill' ? 'filled' : 'suggested', summary });
+        if (group.choices) {
+          const resolved = resolveChoices(group, answer.selected_choice_ids);
+          chosen = resolved.chosen;
+          result.chosen_choice_ids = chosen.map((c) => c.id);
+          result.mapping = chosen.map((c) => {
+            const now = choiceTextNow(c);
+            return {
+              choice_id: c.id,
+              scanned_text: c.text,
+              element: describeElement(c.el),
+              element_text_now: now,
+              text_matches_scan: now === c.text,
+            };
+          });
+          if (resolved.invalid.length) {
+            result.invalid_choice_ids = resolved.invalid;
+            throw new Error(`choice id(s) ${resolved.invalid.map((id) => JSON.stringify(id)).join(', ')} are not choices of ${group.id}; nothing was selected`);
+          }
+          if ((group.kind === 'single_choice' || group.kind === 'dropdown') && chosen.length !== 1) {
+            throw new Error(`expected exactly one choice id for ${group.kind}, got ${chosen.length}`);
+          }
+        }
+        result.summary = answerSummary(group, answer, chosen);
+        if (mode === 'fill') {
+          fill(group, answer, chosen, result.actions);
+          result.after = currentState(group);
+          result.verification = verify(group, answer, chosen);
+          result.status = 'filled';
+        } else {
+          result.status = 'suggested';
+        }
+        addBadge(group, answer, result.summary, result.status);
       } catch (err) {
-        addBadge(group, answer, summary, 'error');
-        results.push({ id: answer.id, status: 'error', summary, error: String(err.message || err) });
+        result.status = 'error';
+        result.error = String(err.message || err);
+        result.summary ??= answerSummary(group, answer, chosen);
+        result.after = currentState(group);
+        addBadge(group, answer, result.summary, 'error');
       }
+      results.push(result);
     }
     return results;
   }
@@ -447,6 +613,16 @@
     .badge .why { display: none; margin-top: 4px; color: #7c2d12; }
     .badge.open .why { display: block; }
     .badge .conf { font-size: 10px; text-transform: uppercase; letter-spacing: .04em; opacity: .7; margin-left: 4px; }
+    .badge.skipped { background: #f5f5f4; color: #44403c; border-color: #d6d3d1; }
+    .badge .debug { display: none; margin-top: 6px; }
+    .badge.open .debug { display: block; }
+    .badge.open:has(details[open]) { max-width: 560px; width: 560px; }
+    .badge summary { cursor: pointer; font-weight: 600; }
+    .badge pre {
+      margin: 4px 0 0; max-height: 360px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere;
+      font: 11px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; background: #fff; color: #1c1917;
+      border: 1px solid #fed7aa; border-radius: 6px; padding: 6px; cursor: text; user-select: text;
+    }
   `;
 
   function ensureOverlay() {
@@ -527,7 +703,7 @@
     const { root, badges } = ensureOverlay();
     const badge = document.createElement('div');
     badge.className = `badge ${status}`;
-    const icon = status === 'filled' ? '✓ ' : status === 'error' ? '⚠ ' : '💡 ';
+    const icon = { filled: '✓ ', error: '⚠ ', skipped: '– ' }[status] ?? '💡 ';
     badge.append(icon + summary);
     const conf = document.createElement('span');
     conf.className = 'conf';
@@ -542,6 +718,37 @@
     root.appendChild(badge);
     badges.push({ badge, group });
     positionBadges();
+  }
+
+  // Adds a "Debug" section to each question's badge. `perQuestion` maps question id
+  // to readable text; `runText` (request, raw response, thinking) is shared and only
+  // rendered when opened.
+  function attachDebug(perQuestion, runText) {
+    if (!overlay) return 0;
+    let attached = 0;
+    for (const { badge, group } of overlay.badges) {
+      const text = perQuestion[group.id];
+      if (!text || badge.querySelector('.debug')) continue;
+      const details = document.createElement('details');
+      details.className = 'debug';
+      const summary = document.createElement('summary');
+      summary.textContent = 'Debug';
+      const pre = document.createElement('pre');
+      pre.textContent = text;
+      const run = document.createElement('details');
+      const runSummary = document.createElement('summary');
+      runSummary.textContent = 'Run details (request, raw response, thinking)';
+      const runPre = document.createElement('pre');
+      run.append(runSummary, runPre);
+      run.addEventListener('toggle', () => { if (run.open && !runPre.textContent) runPre.textContent = runText; });
+      details.append(summary, pre, run);
+      // Clicks inside the debug panel shouldn't collapse the badge.
+      details.addEventListener('click', (e) => e.stopPropagation());
+      details.addEventListener('toggle', queueReposition);
+      badge.append(details);
+      attached++;
+    }
+    return attached;
   }
 
   function clear() {
@@ -563,5 +770,5 @@
     return true;
   }
 
-  window.__pumpkinEater = { scan, apply, clear, scrollToQuestion };
+  window.__pumpkinEater = { scan, apply, clear, scrollToQuestion, attachDebug };
 })();

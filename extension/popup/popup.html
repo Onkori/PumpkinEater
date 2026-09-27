@@ -25,6 +25,11 @@
   </div>
 
   <p id="status" class="status" hidden></p>
+  <div id="exportBar" class="export" hidden>
+    <span>Diagnostic report</span>
+    <button id="exportJson" title="Download this run's diagnostic report as JSON (API key removed)">Export JSON</button>
+    <button id="exportText" title="Download this run's diagnostic report as readable text (API key removed)">Export text</button>
+  </div>
   <ol id="results" class="results"></ol>
 
   <script type="module" src="popup.js"></script>

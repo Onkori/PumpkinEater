@@ -45,3 +45,9 @@ button.icon { border: none; background: none; font-size: 16px; padding: 2px 6px;
 }
 .answer { font-weight: 600; margin-top: 4px; white-space: pre-wrap; overflow-wrap: anywhere; }
 .why { font-size: 12px; color: var(--muted); margin-top: 2px; }
+.export {
+  display: flex; gap: 6px; align-items: center; margin: 0 12px 10px; font-size: 12px; color: var(--muted);
+}
+.export span { flex: 1; }
+.export button { padding: 4px 8px; font-size: 12px; }
+.outcome { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }

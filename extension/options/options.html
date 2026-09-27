@@ -35,8 +35,16 @@
         <div>
           <label for="effort">Effort</label>
           <select id="effort"></select>
-          <p class="hint">Higher effort thinks longer: more accurate on hard questions, slower and costlier.</p>
+          <p class="hint" id="effortHint">Higher effort thinks longer: more accurate on hard questions, slower and costlier.</p>
         </div>
+      </section>
+
+      <section id="haikuSection">
+        <label for="haikuThinking">Haiku 4.5 thinking</label>
+        <select id="haikuThinking"></select>
+        <p class="hint">Haiku 4.5 ignores the effort setting (the API rejects it) and has no adaptive thinking. It only
+          reasons step by step when extended thinking is turned on here, with a fixed token budget shared by all
+          questions on the page. Higher budgets help with calculations and cost more output tokens.</p>
       </section>
 
       <section>
@@ -48,6 +56,17 @@
         <label for="profile">About you (optional)</label>
         <textarea id="profile" rows="5" placeholder="Name: Alex Doe&#10;Email: alex@example.com&#10;Anything else forms often ask"></textarea>
         <p class="hint">Used for questions about yourself. Leave empty and those boxes are skipped.</p>
+      </section>
+
+      <section>
+        <h2>Diagnostics</h2>
+        <label class="check"><input id="debugMode" type="checkbox"> Debug mode</label>
+        <p class="hint">Records, for each question, the detected text and choices, what was sent to Claude, the raw
+          response (including thinking), how the answer was parsed, which page element it mapped to and what was done.
+          Adds a Debug section to each answer badge and an Export button in the popup. It doesn't change the request
+          or how answers are filled. Your API key is never included.</p>
+        <label class="check"><input id="devConsoleLogging" type="checkbox"> Log diagnostics to the service worker console (development)</label>
+        <p class="hint">View it from chrome://extensions → PumpkinEater → "service worker". The API key is never logged.</p>
       </section>
 
       <div class="footer">
