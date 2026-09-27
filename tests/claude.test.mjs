@@ -55,6 +55,7 @@ test('builds a streaming structured-output request with fallbacks on Opus 5', ()
   assert.equal(body.fallbacks, 'default');
   assert.equal(body.output_config.effort, 'high');
   assert.equal(body.output_config.format.type, 'json_schema');
+  assert.deepEqual(body.output_config.format.schema.required, ['q1', 'q2'], 'schema is built for this batch');
   assert.equal('thinking' in body, false);
   const content = body.messages[0].content;
   assert.match(content, /<page_text>\nSome passage\n<\/page_text>/);
@@ -96,24 +97,20 @@ test('drops text from a declined model when a fallback takes over', async () => 
   assert.equal(result.model, 'claude-opus-4-8');
 });
 
-test('returns cleaned answers for known question ids only', async () => {
-  const payload = {
-    answers: [
-      { id: 'q1', should_fill: true, answer_text: '', selected_choice_ids: ['q1.c2'], explanation: 'Paris.', confidence: 'high' },
-      { id: 'q2', should_fill: true, answer_text: '42', selected_choice_ids: [], explanation: '7×6', confidence: 'high' },
-      { id: 'q1', should_fill: true, answer_text: '', selected_choice_ids: ['q1.c1'], explanation: 'dupe', confidence: 'low' },
-      { id: 'q99', should_fill: true, answer_text: 'x', selected_choice_ids: [], explanation: '', confidence: 'low' },
-    ],
-  };
+test('returns the parsed response and reports duplicated keys', async () => {
+  const text = '{"q1": {"answer": "Berlin"}, "q2": {"answer": "42"}, "q1": {"answer": "Paris"}}';
   let request;
   globalThis.fetch = async (url, init) => {
     request = { url, init };
-    return new Response(textStream(JSON.stringify(payload)), { status: 200 });
+    return new Response(textStream(text), { status: 200 });
   };
-  const { answers } = await answerQuestions({ settings, page, questions });
+  const trace = {};
+  const { parsed, duplicates } = await answerQuestions({ settings, page, questions, trace });
   assert.equal(request.url, 'https://api.anthropic.com/v1/messages');
   assert.equal(request.init.method, 'POST');
-  assert.deepEqual(answers.map((a) => [a.id, a.selected_choice_ids, a.answer_text]), [['q1', ['q1.c2'], ''], ['q2', [], '42']]);
+  assert.deepEqual(parsed, JSON.parse(text));
+  assert.deepEqual(duplicates.map((d) => [d.path, d.key, d.first.answer, d.second.answer]), [['$', 'q1', 'Berlin', 'Paris']]);
+  assert.deepEqual(trace.parse.duplicates, [{ path: '$', key: 'q1' }]);
 });
 
 test('reports refusals, truncation and API errors clearly', async () => {
@@ -132,11 +129,11 @@ test('retries overloaded responses before giving up', async () => {
   globalThis.fetch = async () => {
     calls++;
     if (calls === 1) return new Response('{}', { status: 529, headers: { 'retry-after': '0' } });
-    return new Response(textStream('{"answers":[]}'), { status: 200 });
+    return new Response(textStream('{}'), { status: 200 });
   };
-  const { answers } = await answerQuestions({ settings, page, questions });
+  const { parsed } = await answerQuestions({ settings, page, questions });
   assert.equal(calls, 2);
-  assert.deepEqual(answers, []);
+  assert.deepEqual(parsed, {});
 });
 
 // ---------------------------------------------------------------- Haiku 4.5 thinking
@@ -185,10 +182,8 @@ function thinkingStream(text) {
 
 test('trace keeps the redacted request, raw content blocks and the raw parsed JSON', async () => {
   const payload = {
-    answers: [
-      { id: 'q1', should_fill: true, answer_text: '', selected_choice_ids: ['q1.c2'], explanation: 'Paris.', confidence: 'high' },
-      { id: 'q7', should_fill: true, answer_text: '', selected_choice_ids: [], explanation: '', confidence: 'low' },
-    ],
+    q1: { should_fill: true, explanation: 'Paris.', answer: 'Paris', selected_choice_text: 'Paris', selected_choice_id: 'q1.c2', confidence: 'high' },
+    q2: { should_fill: true, explanation: '7 × 6 = 42', answer: '42', confidence: 'high' },
   };
   const text = JSON.stringify(payload);
   globalThis.fetch = async () => new Response(thinkingStream(text), { status: 200 });
@@ -211,10 +206,7 @@ test('trace keeps the redacted request, raw content blocks and the raw parsed JS
 
   assert.equal(trace.parse.ok, true);
   assert.deepEqual(trace.parse.raw, payload, 'raw structured response retained exactly');
-  assert.deepEqual(trace.parse.validation_issues, [
-    { question_id: 'q7', issue: 'answer for unknown question id "q7" ignored' },
-    { question_id: 'q2', issue: 'Claude returned no answer for this question' },
-  ]);
+  assert.deepEqual(trace.parse.duplicates, []);
 });
 
 test('trace keeps the raw text when it cannot be parsed', async () => {
@@ -222,7 +214,7 @@ test('trace keeps the raw text when it cannot be parsed', async () => {
   const trace = {};
   await assert.rejects(answerQuestions({ settings, page, questions, trace }), /could not be read/);
   assert.equal(trace.parse.ok, false);
-  assert.match(trace.parse.error, /JSON.parse failed/);
+  assert.match(trace.parse.error, /JSON parse failed/);
   assert.equal(trace.response.final_text, 'The answer is Paris');
 });
 
@@ -230,7 +222,7 @@ test('tracing does not change the request that is sent', async () => {
   const sent = [];
   globalThis.fetch = async (_url, init) => {
     sent.push({ headers: init.headers, body: init.body });
-    return new Response(textStream('{"answers":[]}'), { status: 200 });
+    return new Response(textStream('{}'), { status: 200 });
   };
   await answerQuestions({ settings, page, questions });
   await answerQuestions({ settings, page, questions, trace: {} });

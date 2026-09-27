@@ -1,4 +1,4 @@
-import { answerQuestions } from './lib/claude.js';
+import { answerWithValidation } from './lib/answering.js';
 import {
   buildRunReport, formatQuestionText, formatReportText, formatRunHeader, scrubSecrets,
 } from './lib/diagnostics.js';
@@ -101,18 +101,23 @@ async function run(tabId) {
       message: `Found ${count} question${count === 1 ? '' : 's'}. Asking Claude…`,
     });
 
-    const { answers, model, fellBack } = await withKeepAlive(() =>
-      answerQuestions({ settings, page: scan.page, questions: scan.questions, trace }));
+    // Answers are checked for internal consistency (and inconsistent ones repaired
+    // once) before anything is applied; see lib/answering.js.
+    const { answers, model, fellBack, ...validation } = await withKeepAlive(() =>
+      answerWithValidation({ settings, page: scan.page, questions: scan.questions, trace }));
     parts.answers = answers;
+    parts.validation = validation;
 
     const results = await inTab(tabId, (a, mode, opts) => window.__pumpkinEater.apply(a, mode, opts),
       answers, settings.mode, { debug: settings.debugMode });
     parts.results = results;
     const filled = results.filter((r) => r.status === 'filled' || r.status === 'suggested').length;
+    const blocked = results.filter((r) => r.status === 'blocked').length;
     const verb = settings.mode === 'fill' ? 'Filled in' : 'Suggested answers for';
     await setState(tabId, {
       ...base, status: 'done', questions: scan.questions, answers, results, model, fellBack,
-      message: `${verb} ${filled} of ${count} question${count === 1 ? '' : 's'}.`,
+      message: `${verb} ${filled} of ${count} question${count === 1 ? '' : 's'}.`
+        + (blocked ? ` ${blocked} left blank because Claude's answer contradicted itself.` : ''),
     });
     parts.status = 'done';
   } catch (err) {
@@ -132,10 +137,40 @@ async function run(tabId) {
   }
 }
 
+// Exports run here, not in the popup: a download started by the popup depends on
+// the popup staying open (it closes when it loses focus, e.g. to a Save As dialog)
+// and on a blob URL the popup owns. A data: URL handed to chrome.downloads has
+// neither dependency.
+async function exportReport(tabId, format) {
+  const report = (await chrome.storage.session.get(diagKey(tabId)))[diagKey(tabId)];
+  if (!report) return { ok: false, error: 'No diagnostic report for this tab. Turn on Debug mode in the options and run again.' };
+  const { apiKey } = await getSettings();
+  const clean = scrubSecrets(report, [apiKey]);
+  const text = format === 'json' ? JSON.stringify(clean, null, 2) : formatReportText(clean);
+  let host = 'page';
+  try { host = new URL(clean.page.url).hostname || 'page'; } catch { /* keep default */ }
+  const stamp = (clean.run.finished_at || new Date().toISOString()).replace(/[:.]/g, '-');
+  const filename = `pumpkineater-diagnostics-${host}-${stamp}.${format === 'json' ? 'json' : 'txt'}`;
+  const bytes = new TextEncoder().encode(text);
+  let binary = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  const url = `data:${format === 'json' ? 'application/json' : 'text/plain'};charset=utf-8;base64,${btoa(binary)}`;
+  try {
+    const downloadId = await chrome.downloads.download({ url, filename, conflictAction: 'uniquify' });
+    return { ok: true, filename, downloadId, bytes: bytes.length };
+  } catch (err) {
+    return { ok: false, error: `Chrome refused the download: ${err.message}` };
+  }
+}
+
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   if (msg?.type === 'run' && Number.isInteger(msg.tabId)) {
     run(msg.tabId);
     sendResponse({ ok: true });
+  }
+  if (msg?.type === 'export' && Number.isInteger(msg.tabId)) {
+    exportReport(msg.tabId, msg.format).then(sendResponse, (err) => sendResponse({ ok: false, error: String(err?.message || err) }));
+    return true; // respond asynchronously
   }
 });
 

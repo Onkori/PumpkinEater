@@ -82,16 +82,24 @@ export const FAILURE_TYPE_GUIDE = {
   B: 'Wrong or missing choices: compare detected.choices (text and raw_text) with the page.',
   C: 'Missing relevant context: check detected.context_text and context_sent (was the passage in the page text sent, or cut off?).',
   D: 'Claude answered wrongly: sent_to_claude looks right but claude_answer_raw picks the wrong choice. Read the thinking blocks.',
-  E: 'Parsing/validation failed: outcome response_unparsed, no_answer or invalid_choice_ids; response.final_text holds what Claude returned.',
+  E: 'Structured answer unusable: outcome response_unparsed, blocked_inconsistent (the answer, option text, explanation and choice id disagreed, or the question was answered twice or not at all) or invalid_choice_ids. See consistency and response.final_text.',
   F: 'Wrong DOM mapping or fill: outcome mapping_mismatch, element_missing, fill_error or fill_unverified; see choice_mapping and action.',
   G: 'Selected successfully: outcome applied_verified. Whether the answer is right still needs your answer key (A-D).',
 };
 
-export function classifyOutcome({ parseOk, raw, answer, result, runError }) {
+export function classifyOutcome({ parseOk, raw, answer, result, runError, consistency }) {
   if (!parseOk) {
     return { code: 'response_unparsed', failure_type: 'E', label: runError || "Claude's response could not be parsed into answers." };
   }
-  if (!raw) return { code: 'no_answer', failure_type: 'E', label: 'Claude returned no answer for this question id.' };
+  if (answer?.blocked || result?.status === 'blocked') {
+    return {
+      code: 'blocked_inconsistent',
+      failure_type: 'E',
+      label: `Not filled: Claude's answer was inconsistent${consistency?.attempts?.length > 1 ? ' even after a repair request' : ''}. `
+        + 'Nothing on the page was changed. See consistency.issues.',
+    };
+  }
+  if (!raw && !answer) return { code: 'no_answer', failure_type: 'E', label: 'Claude returned no answer for this question id.' };
   if (!result) return { code: 'not_applied', failure_type: null, label: runError || 'The answer was not applied to the page.' };
   if (result.status === 'missing') {
     return { code: 'element_missing', failure_type: 'F', label: 'The question element was gone from the page when filling.' };
@@ -101,14 +109,14 @@ export function classifyOutcome({ parseOk, raw, answer, result, runError }) {
     return {
       code: 'invalid_choice_ids',
       failure_type: 'E',
-      label: `Claude returned choice IDs that are not this question's: ${result.invalid_choice_ids.join(', ')}.`,
+      label: `Choice IDs that are not this question's reached the page script: ${result.invalid_choice_ids.join(', ')}. Nothing was selected.`,
     };
   }
   if (result.mapping?.some((m) => !m.text_matches_scan)) {
     return {
       code: 'mapping_mismatch',
       failure_type: 'F',
-      label: 'A chosen choice ID maps to an element whose text no longer matches the text detected at scan time.',
+      label: 'A chosen choice ID maps to an element whose text no longer matches the text detected at scan time, so nothing was clicked.',
     };
   }
   if (result.status === 'error') return { code: 'fill_error', failure_type: 'F', label: `Fill failed: ${result.error}` };
@@ -122,34 +130,46 @@ export function classifyOutcome({ parseOk, raw, answer, result, runError }) {
       label: 'After filling, the page does not show the chosen answer.',
     };
   }
+  if (consistency?.repaired) {
+    return {
+      code: 'repaired_then_applied',
+      failure_type: 'G',
+      label: 'The first answer was inconsistent; the repaired answer passed every check, was applied and read back from the page.',
+    };
+  }
   return {
     code: 'applied_verified',
     failure_type: 'G',
-    label: 'The parsed answer was applied to the mapped element and read back from the page.',
+    label: 'The answer passed the consistency checks, was applied to the mapped element and read back from the page.',
   };
 }
 
 export function buildRunReport({
-  settings, extensionVersion, startedAt, finishedAt, status, error, scan, trace, answers, results,
+  settings, extensionVersion, startedAt, finishedAt, status, error, scan, trace, answers, results, validation,
 }) {
   const body = trace?.request?.body;
   const parse = trace?.parse ?? null;
   const parseOk = Boolean(parse?.ok);
-  const rawById = new Map();
-  for (const a of Array.isArray(parse?.raw?.answers) ? parse.raw.answers : []) {
-    if (a && typeof a.id === 'string' && !rawById.has(a.id)) rawById.set(a.id, a);
-  }
   const answerById = new Map((answers || []).map((a) => [a.id, a]));
   const resultById = new Map((results || []).map((r) => [r.id, r]));
   const detailById = new Map((scan?.details || []).map((d) => [d.question_id, d]));
-  const issuesFor = (id) => (parse?.validation_issues || []).filter((i) => i.question_id === id).map((i) => i.issue);
 
   const questions = (scan?.questions || []).map((q) => {
-    const raw = rawById.get(q.id) ?? null;
+    const attempts = validation?.attempts?.[q.id] ?? [];
+    const verdict = validation?.verdicts?.[q.id] ?? null;
+    const raw = attempts[0]?.raw ?? (parse?.raw && !Array.isArray(parse.raw.answers) ? parse.raw[q.id] ?? null : null);
     const answer = answerById.get(q.id) ?? null;
     const result = resultById.get(q.id) ?? null;
-    const outcome = classifyOutcome({ parseOk, raw, answer, result, runError: error });
-    const errors = [...issuesFor(q.id)];
+    const consistency = verdict
+      ? {
+        status: verdict.status,
+        repaired: Boolean(verdict.repaired),
+        issues: verdict.issues,
+        attempts: attempts.map((a) => ({ source: a.source, status: a.status, issues: a.issues, signals: a.signals, raw: a.raw })),
+      }
+      : null;
+    const outcome = classifyOutcome({ parseOk, raw, answer, result, runError: error, consistency });
+    const errors = [...(verdict?.status === 'inconsistent' ? verdict.issues : [])];
     if (result?.error) errors.push(result.error);
     for (const m of result?.mapping || []) {
       if (!m.text_matches_scan) {
@@ -163,8 +183,14 @@ export function buildRunReport({
       detected: detailById.get(q.id) ?? null,
       sent_to_claude: q,
       claude_answer_raw: raw,
+      consistency,
       parsed: answer
-        ? { should_fill: answer.should_fill, answer_text: answer.answer_text, selected_choice_ids: answer.selected_choice_ids }
+        ? {
+          should_fill: answer.should_fill,
+          blocked: Boolean(answer.blocked),
+          answer_text: answer.answer_text,
+          selected_choice_ids: answer.selected_choice_ids,
+        }
         : null,
       choice_mapping: result?.mapping ?? [],
       action: result
@@ -227,7 +253,31 @@ export function buildRunReport({
       : null,
     request_attempts: trace?.attempts ?? [],
     parse: parse
-      ? { ok: parse.ok, error: parse.error ?? null, raw_json: parse.raw ?? null, validation_issues: parse.validation_issues ?? [] }
+      ? {
+        ok: parse.ok,
+        error: parse.error ?? null,
+        raw_json: parse.raw ?? null,
+        duplicate_keys: parse.duplicates ?? [],
+        validation_issues: validation?.responseIssues ?? [],
+      }
+      : null,
+    schema_fallback: trace?.schema_fallback ? { reason: trace.schema_fallback.reason } : null,
+    repair: validation?.repair?.attempted
+      ? {
+        question_ids: validation.repair.question_ids,
+        error: validation.repair.error,
+        response_issues: validation.repair.response_issues,
+        request: trace?.repair?.request ?? null,
+        response: trace?.repair?.response
+          ? {
+            http_status: trace.repair.response.http_status ?? null,
+            error: trace.repair.response.error ?? null,
+            content_blocks: trace.repair.response.message?.content ?? [],
+            final_text: trace.repair.response.final_text ?? null,
+          }
+          : null,
+        parse: trace?.repair?.parse ?? null,
+      }
       : null,
     questions,
     outcome_counts: counts,
@@ -275,7 +325,15 @@ export function formatQuestionText(q) {
   lines.push(indent(json(q.sent_to_claude)));
   lines.push("Claude's answer (raw, as returned):");
   lines.push(indent(q.claude_answer_raw ? json(q.claude_answer_raw) : '(none)'));
-  if (q.parsed) lines.push(`Parsed: should_fill=${q.parsed.should_fill} choice_ids=${JSON.stringify(q.parsed.selected_choice_ids)} text=${JSON.stringify(q.parsed.answer_text)}`);
+  if (q.consistency) {
+    lines.push(`Consistency: ${q.consistency.status}${q.consistency.repaired ? ' (after repair)' : ''}`);
+    for (const a of q.consistency.attempts) {
+      lines.push(`  ${a.source}: ${a.status}`);
+      for (const issue of a.issues) lines.push(`    - ${issue}`);
+      if (a.source !== 'initial') lines.push(indent(json(a.raw), '      '));
+    }
+  }
+  if (q.parsed) lines.push(`Parsed: should_fill=${q.parsed.should_fill}${q.parsed.blocked ? ' BLOCKED' : ''} choice_ids=${JSON.stringify(q.parsed.selected_choice_ids)} text=${JSON.stringify(q.parsed.answer_text)}`);
   if (q.choice_mapping.length) {
     lines.push('Choice → DOM mapping:');
     for (const m of q.choice_mapping) {
@@ -330,9 +388,19 @@ export function formatReportText(report) {
   } else {
     parts.push('  (no request was made)');
   }
+  if (report.parse?.duplicate_keys?.length) {
+    parts.push('', 'Duplicate keys in the response:');
+    for (const d of report.parse.duplicate_keys) parts.push(`  - ${d.path}.${d.key}`);
+  }
   if (report.parse?.validation_issues?.length) {
-    parts.push('', 'Validation issues:');
-    for (const i of report.parse.validation_issues) parts.push(`  - ${i.question_id ?? '(run)'}: ${i.issue}`);
+    parts.push('', 'Response issues:');
+    for (const i of report.parse.validation_issues) parts.push(`  - ${i}`);
+  }
+  if (report.schema_fallback) parts.push('', `Schema fallback (choice-id enums dropped): ${report.schema_fallback.reason}`);
+  if (report.repair) {
+    parts.push('', rule, `Repair request for ${report.repair.question_ids.join(', ')}${report.repair.error ? ` — FAILED: ${report.repair.error}` : ''}`);
+    if (report.repair.request) parts.push('Repair user message:', indent(report.repair.request.body.messages[0].content));
+    if (report.repair.response) parts.push('Repair response text:', indent(report.repair.response.final_text ?? '(none)'));
   }
   if (report.response) {
     parts.push('', rule, 'Raw response content blocks:');

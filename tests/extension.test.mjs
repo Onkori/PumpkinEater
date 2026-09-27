@@ -53,17 +53,25 @@ async function mockClaude() {
       const body = JSON.parse(init.body);
       globalThis.requests.push({ url, headers: init.headers, body });
       const questions = JSON.parse(body.messages[0].content.match(/<questions>\n([\s\S]*?)\n<\/questions>/)[1]);
-      const answers = questions.map((q) => {
+      // Answers in the keyed format, each consistent (answer, option text and id agree).
+      const answerFor = (q) => {
         const key = Object.entries(KEY).find(([k]) => q.question.includes(k))?.[1];
-        const base = { id: q.id, should_fill: true, answer_text: '', selected_choice_ids: [], explanation: 'mock', confidence: 'high' };
-        const ids = (...names) => q.options.filter((o) => names.includes(o.text)).map((o) => o.choice_id);
-        if (q.question.includes('full name')) return { ...base, should_fill: false, explanation: 'No profile given.' };
-        if (q.question.includes('multiplied')) return { ...base, answer_text: '42' };
-        if (q.question.includes('prime')) return { ...base, selected_choice_ids: ids('2', '7') };
-        if (q.question.includes('even')) return { ...base, selected_choice_ids: ids('8', '10') };
-        if (q.options) return { ...base, selected_choice_ids: key ? ids(key) : [] };
-        return { ...base, answer_text: 'North.' };
-      });
+        const base = { should_fill: true, explanation: 'mock', confidence: 'high' };
+        const opts = (...names) => q.options.filter((o) => names.includes(o.text));
+        if (q.question.includes('full name')) return { ...base, should_fill: false, explanation: 'No profile given.', answer: '' };
+        if (q.question.includes('multiplied')) return { ...base, answer: '42' };
+        const pairs = (list) => ({ ...base, answer: list.map((o) => o.text).join(', '), selected_choices: list.map((o) => ({ choice_text: o.text, choice_id: o.choice_id })) });
+        if (q.question.includes('prime')) return pairs(opts('2', '7'));
+        if (q.question.includes('even')) return pairs(opts('8', '10'));
+        if (q.type === 'checkbox') return pairs([]);
+        if (q.options) {
+          const [o] = key ? opts(key) : [];
+          // No key for the last radio group: an empty answer, which the checks refuse to apply.
+          return { ...base, answer: o?.text ?? '', selected_choice_text: o?.text ?? '', selected_choice_id: o?.choice_id ?? null };
+        }
+        return { ...base, answer: 'North.' };
+      };
+      const answers = Object.fromEntries(questions.map((q) => [q.id, answerFor(q)]));
       const events = [
         { type: 'message_start', message: { model: body.model } },
         ...(body.thinking ? [
@@ -72,7 +80,7 @@ async function mockClaude() {
           { type: 'content_block_stop', index: 0 },
         ] : []),
         { type: 'content_block_start', index: 1, content_block: { type: 'text', text: '' } },
-        { type: 'content_block_delta', index: 1, delta: { type: 'text_delta', text: JSON.stringify({ answers }) } },
+        { type: 'content_block_delta', index: 1, delta: { type: 'text_delta', text: JSON.stringify(answers) } },
         { type: 'content_block_stop', index: 1 },
         { type: 'message_delta', delta: { stop_reason: 'end_turn' } },
         { type: 'message_stop' },
@@ -82,6 +90,29 @@ async function mockClaude() {
       });
     };
   });
+}
+
+// Clicks an export button, waits for the popup's confirmation and the finished
+// download, and returns the file's contents.
+async function exportFrom(popup, button) {
+  const before = await worker.evaluate(() => chrome.downloads.search({}).then((d) => d.length));
+  await popup.click(button);
+  await popup.waitForFunction(() => /^(Saved|Export failed)/.test(document.getElementById('exportStatus').textContent));
+  const status = await popup.textContent('#exportStatus');
+  const item = await worker.evaluate(async (n) => {
+    for (let i = 0; i < 100; i++) {
+      const all = await chrome.downloads.search({});
+      const done = all.length > n && all.find((d) => d.state === 'complete' && d.fileSize > 0 && !globalThis.seenDownloads?.includes(d.id));
+      if (done) {
+        (globalThis.seenDownloads ||= []).push(done.id);
+        return done;
+      }
+      await new Promise((r) => setTimeout(r, 100));
+    }
+    return null;
+  }, before);
+  assert.ok(item, `a completed download for ${button}: ${status}`);
+  return { status, item, text: readFileSync(item.filename, 'utf8') };
 }
 
 async function openPopupFor(page) {
@@ -113,13 +144,16 @@ test('scans, answers and fills the page from the popup', async () => {
 
   await popup.click('#run');
   await popup.waitForFunction(() => document.querySelector('#status').textContent.startsWith('Filled in'));
-  // The mock picks nothing for the last radio group, which is reported rather than filled.
-  assert.equal(await popup.textContent('#status'), 'Filled in 10 of 12 questions.');
+  // The mock gives no usable answer for the last radio group, so it is left blank.
+  assert.equal(await popup.textContent('#status'), "Filled in 10 of 12 questions. 1 left blank because Claude's answer contradicted itself.");
   assert.equal(await popup.locator('#results li').count(), 12);
   assert.equal(await popup.locator('#results li.skipped').count(), 1);
-  assert.match(await popup.locator('#results li').last().textContent(), /Could not fill/);
+  assert.match(await popup.locator('#results li').last().textContent(), /Not filled: inconsistent/);
+  const requests = await worker.evaluate(() => globalThis.requests);
+  assert.equal(requests.length, 2, 'one repair request for the inconsistent question');
+  assert.match(requests[1].body.messages[0].content, /<conflicts>/);
 
-  const [request] = await worker.evaluate(() => globalThis.requests);
+  const [request] = requests;
   assert.equal(request.url, 'https://api.anthropic.com/v1/messages');
   assert.equal(request.headers['x-api-key'], 'sk-test');
   assert.equal(request.body.model, 'claude-opus-5');
@@ -133,6 +167,7 @@ test('scans, answers and fills the page from the popup', async () => {
     badges: document.getElementById('pumpkin-eater-overlay').shadowRoot.querySelectorAll('.badge').length,
   }));
   assert.deepEqual(filled, { mult: '42', capital: 'b', continent: 'af', jupiter: 'true', badges: 11 });
+  assert.equal(await page.evaluate(() => document.querySelector('input[name="styled"]:checked')), null);
 
   await popup.screenshot({ path: path.join(tmpdir(), 'pumpkin-popup.png'), fullPage: true });
   await page.screenshot({ path: path.join(tmpdir(), 'pumpkin-page.png'), fullPage: true });
@@ -197,13 +232,16 @@ test('debug mode records, shows and exports diagnostics without the API key', as
   assert.match(q3Debug, /q3\.c2 "Paris" → /);
   assert.match(q3Debug, /Verification: OK/);
 
-  // Exports.
-  const [jsonDownload] = await Promise.all([popup.waitForEvent('download'), popup.click('#exportJson')]);
-  const exported = readFileSync(await jsonDownload.path(), 'utf8');
-  const [textDownload] = await Promise.all([popup.waitForEvent('download'), popup.click('#exportText')]);
-  const exportedText = readFileSync(await textDownload.path(), 'utf8');
+  // Exports: produced by the service worker through chrome.downloads.
+  const jsonExport = await exportFrom(popup, '#exportJson');
+  const textExport = await exportFrom(popup, '#exportText');
+  const exported = jsonExport.text;
+  const exportedText = textExport.text;
   const report = JSON.parse(exported);
-  assert.match(jsonDownload.suggestedFilename(), /^pumpkineater-diagnostics-127\.0\.0\.1-.*\.json$/);
+  assert.match(jsonExport.status, /^Saved pumpkineater-diagnostics-127\.0\.0\.1-.*\.json \(\d+ KB\) to Downloads\.$/);
+  assert.match(textExport.status, /^Saved pumpkineater-diagnostics-127\.0\.0\.1-.*\.txt /);
+  assert.ok(exported.length > 1000 && exportedText.length > 1000, 'both exports are non-empty');
+  assert.match(exportedText, /^PumpkinEater diagnostic report/);
   assert.equal(report.model.requested, 'claude-haiku-4-5');
   assert.equal(report.thinking.budget_tokens, 4000);
   assert.equal(report.response.thinking_blocks[0].thinking, 'Mock reasoning: 7 x 6 = 42.');

@@ -2,10 +2,12 @@
 // returned and done, must never contain the API key, and must not change answering.
 import assert from 'node:assert/strict';
 import { after, afterEach, before, beforeEach, test } from 'node:test';
+import { answerWithValidation } from '../extension/lib/answering.js';
 import { answerQuestions } from '../extension/lib/claude.js';
 import {
   buildRunReport, formatQuestionText, formatReportText, redactHeaders, scrubSecrets,
 } from '../extension/lib/diagnostics.js';
+import { consistent, requestQuestions, skip, sseResponse } from './answer-helpers.mjs';
 import { fixture, loadPlaywright, root } from './helpers.mjs';
 
 const { chromium } = await loadPlaywright();
@@ -30,51 +32,45 @@ afterEach(() => page?.close());
 const realFetch = globalThis.fetch;
 afterEach(() => { globalThis.fetch = realFetch; });
 
-function mockClaude(answers, { thinking = 'Working through each question.' } = {}) {
-  const text = JSON.stringify({ answers });
-  const events = [
-    { type: 'message_start', message: { id: 'msg_test', model: settings.model, role: 'assistant', usage: { input_tokens: 10 } } },
-    { type: 'content_block_start', index: 0, content_block: { type: 'thinking', thinking: '', signature: '' } },
-    { type: 'content_block_delta', index: 0, delta: { type: 'thinking_delta', thinking } },
-    { type: 'content_block_delta', index: 0, delta: { type: 'signature_delta', signature: 'sig' } },
-    { type: 'content_block_stop', index: 0 },
-    { type: 'content_block_start', index: 1, content_block: { type: 'text', text: '' } },
-    { type: 'content_block_delta', index: 1, delta: { type: 'text_delta', text } },
-    { type: 'content_block_stop', index: 1 },
-    { type: 'message_delta', delta: { stop_reason: 'end_turn' }, usage: { output_tokens: 20 } },
-    { type: 'message_stop' },
-  ];
-  globalThis.fetch = async () => new Response(
-    events.map((e) => `event: ${e.type}\ndata: ${JSON.stringify(e)}\n\n`).join(''), { status: 200 },
-  );
-  return text;
+// Mocks Claude: `spec` maps question id → a choice id / list of ids / text to type,
+// or a full answer object. Unlisted questions are skipped. Repairs get `repair` (default: same).
+function mockClaude(spec, { repair = spec, thinking = 'Working through each question.' } = {}) {
+  const build = (questions, table) => Object.fromEntries(questions.map((qq) => {
+    const v = table[qq.id];
+    if (v === undefined) return [qq.id, skip(qq)];
+    return [qq.id, typeof v === 'object' && !Array.isArray(v) ? v : consistent(qq, v)];
+  }));
+  const responses = [];
+  globalThis.fetch = async (_url, init) => {
+    const req = requestQuestions(init);
+    const body = build(req.questions, req.isRepair ? repair : spec);
+    responses.push(body);
+    return sseResponse(body, { thinking });
+  };
+  return responses;
 }
 
+// Runs the real pipeline: scan in the page, the API client and consistency checks
+// with a mocked fetch, then apply in the page, and builds the report from what
+// each step recorded.
+async function runPipeline(spec, { runSettings = settings, beforeApply, repair } = {}) {
+  const scan = await page.evaluate(() => window.__pumpkinEater.scan({ includePageText: true }));
+  const responses = mockClaude(spec, { repair });
+  const trace = {};
+  const { answers, ...validation } = await answerWithValidation({ settings: runSettings, page: scan.page, questions: scan.questions, trace });
+  if (beforeApply) await beforeApply();
+  const results = await page.evaluate(([a, opts]) => window.__pumpkinEater.apply(a, 'fill', opts), [answers, { debug: true }]);
+  const report = scrubSecrets(buildRunReport({
+    settings: runSettings, extensionVersion: 'test', startedAt: 't0', finishedAt: 't1',
+    status: 'done', scan, trace, answers, results, validation,
+  }), [runSettings.apiKey]);
+  return { scan, trace, report, responses, results };
+}
+
+// An answer as the page script receives it (after validation).
 const ans = (id, fields = {}) => ({
   id, should_fill: true, answer_text: '', selected_choice_ids: [], explanation: 'x', confidence: 'high', ...fields,
 });
-
-// Runs the real pipeline: scan in the page, the API client with a mocked fetch,
-// then apply in the page, and builds the report from what each step recorded.
-async function runPipeline(answers, { runSettings = settings, beforeApply } = {}) {
-  const scan = await page.evaluate(() => window.__pumpkinEater.scan({ includePageText: true }));
-  const rawText = mockClaude(answers);
-  const trace = {};
-  let parsedAnswers = [];
-  let error = null;
-  try {
-    ({ answers: parsedAnswers } = await answerQuestions({ settings: runSettings, page: scan.page, questions: scan.questions, trace }));
-  } catch (err) {
-    error = err.message;
-  }
-  if (beforeApply) await beforeApply();
-  const results = error ? null : await page.evaluate(([a, opts]) => window.__pumpkinEater.apply(a, 'fill', opts), [parsedAnswers, { debug: true }]);
-  const report = scrubSecrets(buildRunReport({
-    settings: runSettings, extensionVersion: 'test', startedAt: 't0', finishedAt: 't1',
-    status: error ? 'error' : 'done', error, scan, trace, answers: parsedAnswers, results,
-  }), [runSettings.apiKey]);
-  return { scan, trace, report, rawText, results };
-}
 
 const q = (report, id) => report.questions.find((x) => x.question_id === id);
 
@@ -107,7 +103,7 @@ test('the report and its text export never contain the API key, even when the pa
     document.querySelector('article').prepend(p);
   }, OPAQUE_KEY);
   const runSettings = { ...settings, apiKey: OPAQUE_KEY };
-  const { report, trace } = await runPipeline([ans('q2', { answer_text: '42' })], { runSettings });
+  const { report, trace } = await runPipeline({ q2: '42' }, { runSettings });
   assert.ok(JSON.stringify(trace.request.body).includes(OPAQUE_KEY), 'the page text really did carry the key');
   assert.equal(JSON.stringify(report).includes(OPAQUE_KEY), false);
   assert.equal(formatReportText(report).includes(OPAQUE_KEY), false);
@@ -117,7 +113,7 @@ test('the report and its text export never contain the API key, even when the pa
 // ---------------------------------------------------------------- accuracy
 
 test('question text, choices and context are recorded exactly as detected and sent', async () => {
-  const { report, trace } = await runPipeline([ans('q3', { selected_choice_ids: ['q3.c2'] })]);
+  const { report, trace } = await runPipeline({ q3: 'q3.c2' });
   const q3 = q(report, 'q3');
   assert.equal(q3.detected.question_text, '2. What is the capital of France?');
   assert.equal(q3.detected.question_text_source, 'nearby_text');
@@ -148,8 +144,8 @@ test('question text, choices and context are recorded exactly as detected and se
 });
 
 test('model, thinking, effort and the raw response are recorded', async () => {
-  const answers = [ans('q3', { selected_choice_ids: ['q3.c2'] })];
-  const { report, rawText } = await runPipeline(answers);
+  const { report, responses } = await runPipeline({ q3: 'q3.c2' });
+  const rawText = JSON.stringify(responses[0]);
   assert.equal(report.model.requested, 'claude-haiku-4-5');
   assert.equal(report.model.served, 'claude-haiku-4-5');
   assert.deepEqual(report.thinking.sent, { type: 'enabled', budget_tokens: 12000 });
@@ -158,13 +154,14 @@ test('model, thinking, effort and the raw response are recorded', async () => {
   assert.match(report.effort.note, /no effect/);
   assert.equal(report.response.final_text, rawText);
   assert.deepEqual(report.response.thinking_blocks, [{ type: 'thinking', thinking: 'Working through each question.', signature: 'sig' }]);
-  assert.deepEqual(report.parse.raw_json, { answers }, 'raw structured response retained');
-  assert.deepEqual(q(report, 'q3').claude_answer_raw, answers[0]);
+  assert.deepEqual(report.parse.raw_json, responses[0], 'raw structured response retained');
+  assert.deepEqual(q(report, 'q3').claude_answer_raw, responses[0].q3);
+  assert.equal(q(report, 'q3').consistency.status, 'consistent');
   assert.match(formatReportText(report), /\[0\] thinking:\n\s+Working through each question\./);
 });
 
 test('Haiku with thinking off is reported as disabled', async () => {
-  const { report } = await runPipeline([ans('q2', { answer_text: '42' })], { runSettings: { ...settings, haikuThinking: 'off' } });
+  const { report } = await runPipeline({ q2: '42' }, { runSettings: { ...settings, haikuThinking: 'off' } });
   assert.equal(report.thinking.enabled, false);
   assert.equal(report.thinking.sent, null);
   assert.equal('thinking' in report.request.body, false);
@@ -173,7 +170,7 @@ test('Haiku with thinking off is reported as disabled', async () => {
 // ---------------------------------------------------------------- mapping
 
 test('choice-ID mapping, action and read-back are logged for a correct selection', async () => {
-  const { report } = await runPipeline([ans('q3', { selected_choice_ids: ['q3.c2'] })]);
+  const { report } = await runPipeline({ q3: 'q3.c2' });
   const q3 = q(report, 'q3');
   assert.deepEqual(q3.parsed.selected_choice_ids, ['q3.c2']);
   assert.equal(q3.choice_mapping.length, 1);
@@ -190,7 +187,7 @@ test('choice-ID mapping, action and read-back are logged for a correct selection
   assert.equal(q3.verification.ok, true);
   assert.deepEqual(q3.outcome, {
     code: 'applied_verified', failure_type: 'G',
-    label: 'The parsed answer was applied to the mapped element and read back from the page.',
+    label: 'The answer passed the consistency checks, was applied to the mapped element and read back from the page.',
   });
   assert.match(formatQuestionText(q3), /q3\.c2 "Paris" → .*value="b".*label="Paris"/);
 });
@@ -198,7 +195,7 @@ test('choice-ID mapping, action and read-back are logged for a correct selection
 test('a choice ID mapped to the wrong DOM element is flagged', async () => {
   // Simulate the page re-rendering between scan and fill: the option labels swap,
   // so choice q3.c2 ("Paris" at scan time) now points at an element labelled "Berlin".
-  const { report } = await runPipeline([ans('q3', { selected_choice_ids: ['q3.c2'] })], {
+  const { report } = await runPipeline({ q3: 'q3.c2' }, {
     beforeApply: () => page.evaluate(() => {
       const [berlin, paris] = document.querySelectorAll('input[name="capital"]');
       berlin.nextSibling.textContent = ' Paris';
@@ -212,10 +209,12 @@ test('a choice ID mapped to the wrong DOM element is flagged', async () => {
   assert.equal(q3.outcome.failure_type, 'F');
   assert.ok(q3.errors.some((e) => /detected as "Paris" but the mapped element now reads "Berlin"/.test(e)));
   assert.match(formatQuestionText(q3), /DOES NOT MATCH/);
+  assert.deepEqual(q3.action.performed, [], 'nothing was clicked');
+  assert.equal(await page.evaluate(() => document.querySelector('input[name="capital"]:checked')), null);
 });
 
 test('a fill that the page undoes is flagged as unverified', async () => {
-  const { report } = await runPipeline([ans('q10', { selected_choice_ids: ['q10.c1'] })], {
+  const { report } = await runPipeline({ q10: 'q10.c1' }, {
     beforeApply: () => page.evaluate(() => {
       document.querySelector('input[name="wet"][value="y"]').addEventListener('click', (e) => e.preventDefault());
     }),
@@ -227,22 +226,29 @@ test('a fill that the page undoes is flagged as unverified', async () => {
 });
 
 test('choice IDs that are not the question\'s are rejected, never guessed', async () => {
-  const { report } = await runPipeline([
-    ans('q3', { selected_choice_ids: ['q5.c2'] }),
-    ans('q7', { selected_choice_ids: ['q7.c1', 'q7.c2'] }),
-  ]);
+  const foreign = {
+    should_fill: true, explanation: 'Paris is the capital.', answer: 'Paris', selected_choice_text: 'Paris', selected_choice_id: 'q5.c2', confidence: 'high',
+  };
+  const { report } = await runPipeline({ q3: foreign });
   const q3 = q(report, 'q3');
-  assert.equal(q3.outcome.code, 'invalid_choice_ids');
+  assert.equal(q3.outcome.code, 'blocked_inconsistent');
   assert.equal(q3.outcome.failure_type, 'E');
-  assert.deepEqual(q3.action.after, [], 'nothing selected');
-  const q7 = q(report, 'q7');
-  assert.equal(q7.outcome.code, 'fill_error');
-  assert.match(q7.errors.join(' '), /expected exactly one choice id/);
+  assert.match(q3.consistency.issues[0], /choice id "q5\.c2" is not one of q3's choices/);
+  assert.deepEqual(q3.consistency.attempts.map((a) => a.source), ['initial', 'repair']);
+  assert.deepEqual(q3.action.performed, []);
+  // The page script refuses bad ids on its own too.
+  const results = await page.evaluate(() => window.__pumpkinEater.apply([
+    { id: 'q7', should_fill: true, answer_text: '', selected_choice_ids: ['q7.c1', 'q7.c2'], explanation: '', confidence: 'high' },
+    { id: 'q5', should_fill: true, answer_text: '', selected_choice_ids: ['q3.c2'], explanation: '', confidence: 'high' },
+  ], 'fill'));
+  assert.match(results[0].error, /expected exactly one choice id/);
+  assert.deepEqual(results[1].invalid_choice_ids, ['q3.c2']);
   const checked = await page.evaluate(() => ({
     capital: document.querySelector('input[name="capital"]:checked'),
     planets: [...document.querySelectorAll('[role="radio"]')].filter((r) => r.getAttribute('aria-checked') === 'true').length,
+    continent: document.getElementById('continent').value,
   }));
-  assert.deepEqual(checked, { capital: null, planets: 0 });
+  assert.deepEqual(checked, { capital: null, planets: 0, continent: '' });
 });
 
 test('an unparseable response is reported with the raw text kept', async () => {

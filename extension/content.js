@@ -548,6 +548,12 @@
         results.push({ id: answer.id, status: 'skipped' });
         continue;
       }
+      // Claude's answer contradicted itself: show why, never touch the page.
+      if (answer.blocked) {
+        addBadge(group, { ...answer, explanation: `Not filled: ${answer.block_reason}` }, 'Not filled: answer was inconsistent', 'error');
+        results.push({ id: answer.id, status: 'blocked', error: answer.block_reason, before: currentState(group), after: currentState(group), actions: [], mapping: [] });
+        continue;
+      }
 
       const result = { id: answer.id, actions: [], mapping: [], before: currentState(group) };
       let chosen = [];
@@ -572,6 +578,12 @@
           }
           if ((group.kind === 'single_choice' || group.kind === 'dropdown') && chosen.length !== 1) {
             throw new Error(`expected exactly one choice id for ${group.kind}, got ${chosen.length}`);
+          }
+          // The element must still be the option that was scanned (and sent to Claude).
+          const moved = result.mapping.filter((m) => !m.text_matches_scan);
+          if (moved.length) {
+            throw new Error(moved.map((m) => `${m.choice_id} was "${m.scanned_text}" when scanned but its element now reads "${m.element_text_now}"`).join('; ')
+              + '; nothing was clicked');
           }
         }
         result.summary = answerSummary(group, answer, chosen);

@@ -1,0 +1,659 @@
+{
+ "source": "PumpkinEater diagnostic report from https://www.tests.com/practice/math-test-addition-level-1 (claude-haiku-4-5, thinking off), and the site's results page (AnalyzeforChat.pdf, 13/20).",
+ "model_served": "claude-haiku-4-5-20251001",
+ "settings": {
+  "effort": "high",
+  "haiku_thinking": "off",
+  "include_page_text": true,
+  "mode": "fill",
+  "model": "claude-haiku-4-5",
+  "profile_provided": false
+ },
+ "questions_sent": [
+  {
+   "id": "q1",
+   "options": [
+    {
+     "choice_id": "q1.c1",
+     "text": "View Answers as You Go"
+    }
+   ],
+   "question": "View Answers as You Go",
+   "type": "checkbox"
+  },
+  {
+   "id": "q2",
+   "options": [
+    {
+     "choice_id": "q2.c1",
+     "text": "View 1 Question at a Time"
+    }
+   ],
+   "question": "View 1 Question at a Time",
+   "type": "checkbox"
+  },
+  {
+   "id": "q3",
+   "options": [
+    {
+     "choice_id": "q3.c1",
+     "text": "a. 2"
+    },
+    {
+     "choice_id": "q3.c2",
+     "text": "b. 4"
+    },
+    {
+     "choice_id": "q3.c3",
+     "text": "c. 5"
+    },
+    {
+     "choice_id": "q3.c4",
+     "text": "d. 6"
+    }
+   ],
+   "question": "1. 1 + 3 =",
+   "type": "single_choice"
+  },
+  {
+   "id": "q4",
+   "options": [
+    {
+     "choice_id": "q4.c1",
+     "text": "a. 4"
+    },
+    {
+     "choice_id": "q4.c2",
+     "text": "b. 5"
+    },
+    {
+     "choice_id": "q4.c3",
+     "text": "c. 6"
+    },
+    {
+     "choice_id": "q4.c4",
+     "text": "d. 7"
+    }
+   ],
+   "question": "2. 3 + 2 =",
+   "type": "single_choice"
+  },
+  {
+   "id": "q5",
+   "options": [
+    {
+     "choice_id": "q5.c1",
+     "text": "a. 6"
+    },
+    {
+     "choice_id": "q5.c2",
+     "text": "b. 7"
+    },
+    {
+     "choice_id": "q5.c3",
+     "text": "c. 8"
+    },
+    {
+     "choice_id": "q5.c4",
+     "text": "d. 10"
+    }
+   ],
+   "question": "3. 4 + 4 =",
+   "type": "single_choice"
+  },
+  {
+   "id": "q6",
+   "options": [
+    {
+     "choice_id": "q6.c1",
+     "text": "a. 2"
+    },
+    {
+     "choice_id": "q6.c2",
+     "text": "b. 7"
+    },
+    {
+     "choice_id": "q6.c3",
+     "text": "c. 8"
+    },
+    {
+     "choice_id": "q6.c4",
+     "text": "d. 9"
+    }
+   ],
+   "question": "4. 3 + 5 =",
+   "type": "single_choice"
+  },
+  {
+   "id": "q7",
+   "options": [
+    {
+     "choice_id": "q7.c1",
+     "text": "a. 5"
+    },
+    {
+     "choice_id": "q7.c2",
+     "text": "b. 6"
+    },
+    {
+     "choice_id": "q7.c3",
+     "text": "c. 8"
+    },
+    {
+     "choice_id": "q7.c4",
+     "text": "d. 9"
+    }
+   ],
+   "question": "5. 7 + 2",
+   "type": "single_choice"
+  },
+  {
+   "id": "q8",
+   "options": [
+    {
+     "choice_id": "q8.c1",
+     "text": "a. 8"
+    },
+    {
+     "choice_id": "q8.c2",
+     "text": "b. 9"
+    },
+    {
+     "choice_id": "q8.c3",
+     "text": "c. 11"
+    },
+    {
+     "choice_id": "q8.c4",
+     "text": "d. 12"
+    }
+   ],
+   "question": "6. 10 + 2 =",
+   "type": "single_choice"
+  },
+  {
+   "id": "q9",
+   "options": [
+    {
+     "choice_id": "q9.c1",
+     "text": "a. 12"
+    },
+    {
+     "choice_id": "q9.c2",
+     "text": "b. 13"
+    },
+    {
+     "choice_id": "q9.c3",
+     "text": "c. 14"
+    },
+    {
+     "choice_id": "q9.c4",
+     "text": "d. 15"
+    }
+   ],
+   "question": "7. 7 + 6 =",
+   "type": "single_choice"
+  },
+  {
+   "id": "q10",
+   "options": [
+    {
+     "choice_id": "q10.c1",
+     "text": "a. 9"
+    },
+    {
+     "choice_id": "q10.c2",
+     "text": "b. 8"
+    },
+    {
+     "choice_id": "q10.c3",
+     "text": "c. 7"
+    },
+    {
+     "choice_id": "q10.c4",
+     "text": "d. 6"
+    }
+   ],
+   "question": "8. 5 + 4 =",
+   "type": "single_choice"
+  },
+  {
+   "id": "q11",
+   "options": [
+    {
+     "choice_id": "q11.c1",
+     "text": "a. 0"
+    },
+    {
+     "choice_id": "q11.c2",
+     "text": "b. 3"
+    },
+    {
+     "choice_id": "q11.c3",
+     "text": "c. 4"
+    },
+    {
+     "choice_id": "q11.c4",
+     "text": "d. 5"
+    }
+   ],
+   "question": "9. 2 + 2 =",
+   "type": "single_choice"
+  },
+  {
+   "id": "q12",
+   "options": [
+    {
+     "choice_id": "q12.c1",
+     "text": "a. 10"
+    },
+    {
+     "choice_id": "q12.c2",
+     "text": "b. 11"
+    },
+    {
+     "choice_id": "q12.c3",
+     "text": "c. 12"
+    },
+    {
+     "choice_id": "q12.c4",
+     "text": "d. 13"
+    }
+   ],
+   "question": "10. 9 + 3 =",
+   "type": "single_choice"
+  },
+  {
+   "id": "q13",
+   "options": [
+    {
+     "choice_id": "q13.c1",
+     "text": "a. 10"
+    },
+    {
+     "choice_id": "q13.c2",
+     "text": "b. 11"
+    },
+    {
+     "choice_id": "q13.c3",
+     "text": "c. 12"
+    },
+    {
+     "choice_id": "q13.c4",
+     "text": "d. 13"
+    }
+   ],
+   "question": "11. 8 + 3 =",
+   "type": "single_choice"
+  },
+  {
+   "id": "q14",
+   "options": [
+    {
+     "choice_id": "q14.c1",
+     "text": "a. 15"
+    },
+    {
+     "choice_id": "q14.c2",
+     "text": "b. 16"
+    },
+    {
+     "choice_id": "q14.c3",
+     "text": "c. 17"
+    },
+    {
+     "choice_id": "q14.c4",
+     "text": "d. 18"
+    }
+   ],
+   "question": "12. 9 + 9 =",
+   "type": "single_choice"
+  },
+  {
+   "id": "q15",
+   "options": [
+    {
+     "choice_id": "q15.c1",
+     "text": "a. 13"
+    },
+    {
+     "choice_id": "q15.c2",
+     "text": "b. 14"
+    },
+    {
+     "choice_id": "q15.c3",
+     "text": "c. 15"
+    },
+    {
+     "choice_id": "q15.c4",
+     "text": "d. 16"
+    }
+   ],
+   "question": "13. 8 + 7 =",
+   "type": "single_choice"
+  },
+  {
+   "id": "q16",
+   "options": [
+    {
+     "choice_id": "q16.c1",
+     "text": "a. 14"
+    },
+    {
+     "choice_id": "q16.c2",
+     "text": "b. 15"
+    },
+    {
+     "choice_id": "q16.c3",
+     "text": "c. 16"
+    },
+    {
+     "choice_id": "q16.c4",
+     "text": "d. 17"
+    }
+   ],
+   "question": "14. 8 + 8 =",
+   "type": "single_choice"
+  },
+  {
+   "id": "q17",
+   "options": [
+    {
+     "choice_id": "q17.c1",
+     "text": "a. 0"
+    },
+    {
+     "choice_id": "q17.c2",
+     "text": "b. 7"
+    },
+    {
+     "choice_id": "q17.c3",
+     "text": "c. 16"
+    },
+    {
+     "choice_id": "q17.c4",
+     "text": "d. 17"
+    }
+   ],
+   "question": "15. 7 + 10 =",
+   "type": "single_choice"
+  },
+  {
+   "id": "q18",
+   "options": [
+    {
+     "choice_id": "q18.c1",
+     "text": "a. 13"
+    },
+    {
+     "choice_id": "q18.c2",
+     "text": "b. 14"
+    },
+    {
+     "choice_id": "q18.c3",
+     "text": "c. 15"
+    },
+    {
+     "choice_id": "q18.c4",
+     "text": "d. 16"
+    }
+   ],
+   "question": "16. 6 + 9 =",
+   "type": "single_choice"
+  },
+  {
+   "id": "q19",
+   "options": [
+    {
+     "choice_id": "q19.c1",
+     "text": "a. 11"
+    },
+    {
+     "choice_id": "q19.c2",
+     "text": "b. 12"
+    },
+    {
+     "choice_id": "q19.c3",
+     "text": "c. 13"
+    },
+    {
+     "choice_id": "q19.c4",
+     "text": "d. 14"
+    }
+   ],
+   "question": "17. 9 + 3 =",
+   "type": "single_choice"
+  },
+  {
+   "id": "q20",
+   "options": [
+    {
+     "choice_id": "q20.c1",
+     "text": "a. 4"
+    },
+    {
+     "choice_id": "q20.c2",
+     "text": "b. 7"
+    },
+    {
+     "choice_id": "q20.c3",
+     "text": "c. 8"
+    },
+    {
+     "choice_id": "q20.c4",
+     "text": "d. 9"
+    }
+   ],
+   "question": "18. 6 + 2 =",
+   "type": "single_choice"
+  },
+  {
+   "id": "q21",
+   "options": [
+    {
+     "choice_id": "q21.c1",
+     "text": "a. 22"
+    },
+    {
+     "choice_id": "q21.c2",
+     "text": "b. 23"
+    },
+    {
+     "choice_id": "q21.c3",
+     "text": "c. 24"
+    },
+    {
+     "choice_id": "q21.c4",
+     "text": "d. 25"
+    }
+   ],
+   "question": "19. 3 + 8 + 13 =",
+   "type": "single_choice"
+  },
+  {
+   "id": "q22",
+   "options": [
+    {
+     "choice_id": "q22.c1",
+     "text": "a. 15"
+    },
+    {
+     "choice_id": "q22.c2",
+     "text": "b. 16"
+    },
+    {
+     "choice_id": "q22.c3",
+     "text": "c. 17"
+    },
+    {
+     "choice_id": "q22.c4",
+     "text": "d. 18"
+    }
+   ],
+   "question": "20. 4 + 4 + 0 + 4 + 5 =",
+   "type": "single_choice"
+  }
+ ],
+ "haiku_response_text": "{\"answers\": [{\"id\": \"q1\", \"should_fill\": false, \"answer_text\": \"\", \"selected_choice_ids\": [], \"explanation\": \"This is a display preference checkbox, not a question requiring knowledge to answer.\", \"confidence\": \"high\"}, {\"id\": \"q2\", \"should_fill\": false, \"answer_text\": \"\", \"selected_choice_ids\": [], \"explanation\": \"This is a display preference checkbox, not a question requiring knowledge to answer.\", \"confidence\": \"high\"}, {\"id\": \"q3\", \"should_fill\": true, \"answer_text\": \"\", \"selected_choice_ids\": [\"q3.c2\"], \"explanation\": \"1 + 3 = 4, which corresponds to option b.\", \"confidence\": \"high\"}, {\"id\": \"q4\", \"should_fill\": true, \"answer_text\": \"\", \"selected_choice_ids\": [\"q4.c2\"], \"explanation\": \"3 + 2 = 5, which corresponds to option b.\", \"confidence\": \"high\"}, {\"id\": \"q5\", \"should_fill\": true, \"answer_text\": \"\", \"selected_choice_ids\": [\"q5.c3\"], \"explanation\": \"4 + 4 = 8, which corresponds to option c.\", \"confidence\": \"high\"}, {\"id\": \"q6\", \"should_fill\": true, \"answer_text\": \"\", \"selected_choice_ids\": [\"q6.c2\"], \"explanation\": \"3 + 5 = 8, which corresponds to option b.\", \"confidence\": \"high\"}, {\"id\": \"q7\", \"should_fill\": true, \"answer_text\": \"\", \"selected_choice_ids\": [\"q7.c3\"], \"explanation\": \"7 + 2 = 9, which corresponds to option c.\", \"confidence\": \"high\"}, {\"id\": \"q8\", \"should_fill\": true, \"answer_text\": \"\", \"selected_choice_ids\": [\"q8.c4\"], \"explanation\": \"10 + 2 = 12, which corresponds to option d.\", \"confidence\": \"high\"}, {\"id\": \"q9\", \"should_fill\": true, \"answer_text\": \"\", \"selected_choice_ids\": [\"q9.c2\"], \"explanation\": \"7 + 6 = 13, which corresponds to option b.\", \"confidence\": \"high\"}, {\"id\": \"q10\", \"should_fill\": true, \"answer_text\": \"\", \"selected_choice_ids\": [\"q10.c1\"], \"explanation\": \"5 + 4 = 9, which corresponds to option a.\", \"confidence\": \"high\"}, {\"id\": \"q11\", \"should_fill\": true, \"answer_text\": \"\", \"selected_choice_ids\": [\"q11.c3\"], \"explanation\": \"2 + 2 = 4, which corresponds to option c.\", \"confidence\": \"high\"}, {\"id\": \"q12\", \"should_fill\": true, \"answer_text\": \"\", \"selected_choice_ids\": [\"q12.c3\"], \"explanation\": \"9 + 3 = 12, which corresponds to option c.\", \"confidence\": \"high\"}, {\"id\": \"q13\", \"should_fill\": true, \"answer_text\": \"\", \"selected_choice_ids\": [\"q13.c2\"], \"explanation\": \"8 + 3 = 11, which corresponds to option b.\", \"confidence\": \"high\"}, {\"id\": \"q14\", \"should_fill\": true, \"answer_text\": \"\", \"selected_choice_ids\": [\"q14.c2\"], \"explanation\": \"9 + 9 = 18, which corresponds to option d. Wait, let me recalculate: 9 + 9 = 18, which is option d (18).\", \"confidence\": \"high\"}, {\"id\": \"q14\", \"should_fill\": true, \"answer_text\": \"\", \"selected_choice_ids\": [\"q14.c4\"], \"explanation\": \"9 + 9 = 18, which corresponds to option d.\", \"confidence\": \"high\"}, {\"id\": \"q15\", \"should_fill\": true, \"answer_text\": \"\", \"selected_choice_ids\": [\"q15.c2\"], \"explanation\": \"8 + 7 = 15, which corresponds to option b.\", \"confidence\": \"high\"}, {\"id\": \"q16\", \"should_fill\": true, \"answer_text\": \"\", \"selected_choice_ids\": [\"q16.c3\"], \"explanation\": \"8 + 8 = 16, which corresponds to option c.\", \"confidence\": \"high\"}, {\"id\": \"q17\", \"should_fill\": true, \"answer_text\": \"\", \"selected_choice_ids\": [\"q17.c4\"], \"explanation\": \"7 + 10 = 17, which corresponds to option d.\", \"confidence\": \"high\"}, {\"id\": \"q18\", \"should_fill\": true, \"answer_text\": \"\", \"selected_choice_ids\": [\"q18.c1\"], \"explanation\": \"6 + 9 = 15, which corresponds to option a.\", \"confidence\": \"high\"}, {\"id\": \"q19\", \"should_fill\": true, \"answer_text\": \"\", \"selected_choice_ids\": [\"q19.c3\"], \"explanation\": \"9 + 3 = 12, which corresponds to option c.\", \"confidence\": \"high\"}, {\"id\": \"q20\", \"should_fill\": true, \"answer_text\": \"\", \"selected_choice_ids\": [\"q20.c3\"], \"explanation\": \"6 + 2 = 8, which corresponds to option c.\", \"confidence\": \"high\"}, {\"id\": \"q21\", \"should_fill\": true, \"answer_text\": \"\", \"selected_choice_ids\": [\"q21.c3\"], \"explanation\": \"3 + 8 + 13 = 24, which corresponds to option c.\", \"confidence\": \"high\"}, {\"id\": \"q22\", \"should_fill\": true, \"answer_text\": \"\", \"selected_choice_ids\": [\"q22.c1\"], \"explanation\": \"4 + 4 + 0 + 4 + 5 = 17, which corresponds to option c. Let me recalculate: 4 + 4 = 8, 8 + 0 = 8, 8 + 4 = 12, 12 + 5 = 17.\", \"confidence\": \"high\"}]}",
+ "site_results": [
+  {
+   "page_number": 1,
+   "question_id": "q3",
+   "correct_choice_id": "q3.c2",
+   "correct_text": "b. 4",
+   "marked_wrong_choice_id": null,
+   "marked_wrong_text": null
+  },
+  {
+   "page_number": 2,
+   "question_id": "q4",
+   "correct_choice_id": "q4.c2",
+   "correct_text": "b. 5",
+   "marked_wrong_choice_id": null,
+   "marked_wrong_text": null
+  },
+  {
+   "page_number": 3,
+   "question_id": "q5",
+   "correct_choice_id": "q5.c3",
+   "correct_text": "c. 8",
+   "marked_wrong_choice_id": null,
+   "marked_wrong_text": null
+  },
+  {
+   "page_number": 4,
+   "question_id": "q6",
+   "correct_choice_id": "q6.c3",
+   "correct_text": "c. 8",
+   "marked_wrong_choice_id": "q6.c2",
+   "marked_wrong_text": "b. 7"
+  },
+  {
+   "page_number": 5,
+   "question_id": "q7",
+   "correct_choice_id": "q7.c4",
+   "correct_text": "d. 9",
+   "marked_wrong_choice_id": "q7.c3",
+   "marked_wrong_text": "c. 8"
+  },
+  {
+   "page_number": 6,
+   "question_id": "q8",
+   "correct_choice_id": "q8.c4",
+   "correct_text": "d. 12",
+   "marked_wrong_choice_id": null,
+   "marked_wrong_text": null
+  },
+  {
+   "page_number": 7,
+   "question_id": "q9",
+   "correct_choice_id": "q9.c2",
+   "correct_text": "b. 13",
+   "marked_wrong_choice_id": null,
+   "marked_wrong_text": null
+  },
+  {
+   "page_number": 8,
+   "question_id": "q10",
+   "correct_choice_id": "q10.c1",
+   "correct_text": "a. 9",
+   "marked_wrong_choice_id": null,
+   "marked_wrong_text": null
+  },
+  {
+   "page_number": 9,
+   "question_id": "q11",
+   "correct_choice_id": "q11.c3",
+   "correct_text": "c. 4",
+   "marked_wrong_choice_id": null,
+   "marked_wrong_text": null
+  },
+  {
+   "page_number": 10,
+   "question_id": "q12",
+   "correct_choice_id": "q12.c3",
+   "correct_text": "c. 12",
+   "marked_wrong_choice_id": null,
+   "marked_wrong_text": null
+  },
+  {
+   "page_number": 11,
+   "question_id": "q13",
+   "correct_choice_id": "q13.c2",
+   "correct_text": "b. 11",
+   "marked_wrong_choice_id": null,
+   "marked_wrong_text": null
+  },
+  {
+   "page_number": 12,
+   "question_id": "q14",
+   "correct_choice_id": "q14.c4",
+   "correct_text": "d. 18",
+   "marked_wrong_choice_id": "q14.c2",
+   "marked_wrong_text": "b. 16"
+  },
+  {
+   "page_number": 13,
+   "question_id": "q15",
+   "correct_choice_id": "q15.c3",
+   "correct_text": "c. 15",
+   "marked_wrong_choice_id": "q15.c2",
+   "marked_wrong_text": "b. 14"
+  },
+  {
+   "page_number": 14,
+   "question_id": "q16",
+   "correct_choice_id": "q16.c3",
+   "correct_text": "c. 16",
+   "marked_wrong_choice_id": null,
+   "marked_wrong_text": null
+  },
+  {
+   "page_number": 15,
+   "question_id": "q17",
+   "correct_choice_id": "q17.c4",
+   "correct_text": "d. 17",
+   "marked_wrong_choice_id": null,
+   "marked_wrong_text": null
+  },
+  {
+   "page_number": 16,
+   "question_id": "q18",
+   "correct_choice_id": "q18.c3",
+   "correct_text": "c. 15",
+   "marked_wrong_choice_id": "q18.c1",
+   "marked_wrong_text": "a. 13"
+  },
+  {
+   "page_number": 17,
+   "question_id": "q19",
+   "correct_choice_id": "q19.c2",
+   "correct_text": "b. 12",
+   "marked_wrong_choice_id": "q19.c3",
+   "marked_wrong_text": "c. 13"
+  },
+  {
+   "page_number": 18,
+   "question_id": "q20",
+   "correct_choice_id": "q20.c3",
+   "correct_text": "c. 8",
+   "marked_wrong_choice_id": null,
+   "marked_wrong_text": null
+  },
+  {
+   "page_number": 19,
+   "question_id": "q21",
+   "correct_choice_id": "q21.c3",
+   "correct_text": "c. 24",
+   "marked_wrong_choice_id": null,
+   "marked_wrong_text": null
+  },
+  {
+   "page_number": 20,
+   "question_id": "q22",
+   "correct_choice_id": "q22.c3",
+   "correct_text": "c. 17",
+   "marked_wrong_choice_id": "q22.c1",
+   "marked_wrong_text": "a. 15"
+  }
+ ]
+}

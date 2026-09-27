@@ -51,3 +51,8 @@ button.icon { border: none; background: none; font-size: 16px; padding: 2px 6px;
 .export span { flex: 1; }
 .export button { padding: 4px 8px; font-size: 12px; }
 .outcome { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.model-info { margin: 8px 12px 0; font-size: 11px; color: var(--muted); }
+.export-status { margin: -4px 12px 10px; font-size: 12px; overflow-wrap: anywhere; }
+.export-status.ok { color: var(--ok); }
+.export-status.error { color: var(--danger); }
+.results li.blocked { border-color: var(--danger); }

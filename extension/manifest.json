@@ -23,12 +23,21 @@
     "service_worker": "background.js",
     "type": "module"
   },
-  "permissions": ["activeTab", "scripting", "storage"],
-  "host_permissions": ["https://api.anthropic.com/*"],
+  "permissions": [
+    "activeTab",
+    "scripting",
+    "storage",
+    "downloads"
+  ],
+  "host_permissions": [
+    "https://api.anthropic.com/*"
+  ],
   "options_page": "options/options.html",
   "commands": {
     "answer-page": {
-      "suggested_key": { "default": "Alt+Shift+A" },
+      "suggested_key": {
+        "default": "Alt+Shift+A"
+      },
       "description": "Scan this page and answer its questions"
     }
   }

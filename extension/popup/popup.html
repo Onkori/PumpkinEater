@@ -13,6 +13,7 @@
     <button id="settings" class="icon" title="Settings" aria-label="Settings">⚙</button>
   </header>
 
+  <p id="modelInfo" class="model-info"></p>
   <div class="controls">
     <div class="segmented" role="radiogroup" aria-label="What to do with answers">
       <label><input type="radio" name="mode" value="fill"> Fill in</label>
@@ -30,6 +31,7 @@
     <button id="exportJson" title="Download this run's diagnostic report as JSON (API key removed)">Export JSON</button>
     <button id="exportText" title="Download this run's diagnostic report as readable text (API key removed)">Export text</button>
   </div>
+  <p id="exportStatus" class="export-status" role="status" hidden></p>
   <ol id="results" class="results"></ol>
 
   <script type="module" src="popup.js"></script>
